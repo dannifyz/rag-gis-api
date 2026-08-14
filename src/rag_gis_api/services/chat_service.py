@@ -1,6 +1,5 @@
 from rag_gis_api.services.llm_service import get_llm
 
-
 SYSTEM_PROMPT = "ตอบเป็นภาษาไทย กระชับ ความยาวไม่เกิน 4 บรรทัด ห้ามตอบเกิน 4 บรรทัดเด็ดขาด"
 
 

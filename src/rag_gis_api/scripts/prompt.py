@@ -3,7 +3,6 @@ import sys
 
 from rag_gis_api.services.llm_service import get_llm
 
-
 DEFAULT_QUESTION = "ประเทศไทยมีกี่จังหวัด"
 SYSTEM_PROMPT = "ตอบสั้น ๆ ไม่เกิน 2 ประโยค ไม่ต้องอธิบายเพิ่ม"
 

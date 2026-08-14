@@ -4,7 +4,6 @@ import sys
 from rag_gis_api import DATA_PATH
 from rag_gis_api.services.ingest.load_pdf import load_pdf
 
-
 # Min_Notif_028.pdf is readable by PyPDF.
 DEFAULT_PDF = "law/min_notif/Min_Notif_028.pdf"
 

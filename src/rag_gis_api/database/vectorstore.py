@@ -3,7 +3,6 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from rag_gis_api import PROJECT_ROOT
 
-
 embeddings = GoogleGenerativeAIEmbeddings(
     model="models/gemini-embedding-001", output_dimensionality=768
 )

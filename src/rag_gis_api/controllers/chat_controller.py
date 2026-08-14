@@ -4,7 +4,6 @@ from fastapi import APIRouter, Query
 
 from rag_gis_api.services.chat_service import ask
 
-
 DEFAULT_QUESTION = "สวัสดีครับคุณคือใคร"
 
 router = APIRouter(prefix="/chat", tags=["chat"])
