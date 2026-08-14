@@ -56,6 +56,7 @@ uv run pre-commit run --all-files
 | คำสั่ง | ทำอะไร |
 | --- | --- |
 | `uv run rag-gis-api` | start FastAPI ด้วย uvicorn ที่ `127.0.0.1:8000` (reload เมื่อ `ENV=local`) |
+| `uv run rag-gis-chat "<คำถาม>"` | ถาม API ที่รันอยู่ผ่าน SSE แล้ว print แต่ละ event พร้อมเวลาที่ได้รับ ต้องเปิด `rag-gis-api` ค้างไว้ก่อน — รายละเอียดที่ [`services/chat/README.md`](src/rag_gis_api/services/chat/README.md) |
 | `uv run rag-gis-ingest` | ingest PDF ทุกไฟล์ใน `documents/` เข้า vector store (ข้ามไฟล์ที่ไม่เปลี่ยน) |
 | `uv run rag-gis-ingest <path>` | ingest เฉพาะไฟล์เดียว โดย path อ้างจาก `documents/` |
 | `uv run rag-gis-ingest <folder>` | ingest ทุกไฟล์ในโฟลเดอร์นั้น รวม subfolder เช่น `law/min_notif` |
