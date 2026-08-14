@@ -52,6 +52,16 @@ def get_chunks(source: str) -> list[Document]:
     )
 
 
+async def search_chunks(question: str, limit: int) -> list[Document]:
+    """
+    Return the stored chunks most similar to the question, best match first.
+
+    Async because embedding the question is a network call: the sync version
+    would block the event loop and stall every other request for its duration.
+    """
+    return await vectorstore.asimilarity_search(question, k=limit)
+
+
 def save_chunks(chunks: list[Document]) -> None:
     """Embed and store chunks. Chroma upserts, so this also replaces old vectors."""
     if not chunks:
