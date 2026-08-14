@@ -63,6 +63,8 @@ uv run pre-commit run --all-files
 | `uv run rag-gis-load-pdf` | อ่าน PDF ใน `documents/` แล้ว print เนื้อหาแต่ละหน้า ใช้ตรวจว่า PyPDF อ่านไฟล์ออกไหม |
 | `uv run rag-gis-load-pdf <path>` | ระบุไฟล์เอง โดย path อ้างจาก `documents/` |
 | `uv run rag-gis-load-pdf <path> --page N` | print เฉพาะหน้า N (เริ่มที่ 0) |
+| `uv run rag-gis-load-doc <path>` | print chunk ของไฟล์ที่ ingest ไว้แล้วใน vector store แยกตามหน้า (path จำเป็น อ้างจาก `documents/`) |
+| `uv run rag-gis-load-doc <path> --page N` | print เฉพาะ chunk ของหน้า N (เริ่มที่ 0) |
 | `uv run rag-gis-prompt` | ส่ง prompt ตัวอย่างไปหา LLM แล้ว print คำตอบ ใช้ตรวจว่าต่อ Gemini ได้ไหม |
 | `uv run rag-gis-prompt "<คำถาม>"` | ถามคำถามเอง (system prompt กำกับให้ตอบสั้น ๆ ไม่เกิน 2 ประโยค) |
 | `uv run ruff format .` | format โค้ดทั้งโปรเจกต์ |

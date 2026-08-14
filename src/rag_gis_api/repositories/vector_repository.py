@@ -29,6 +29,29 @@ def get_chunk_hashes(source: str) -> dict[str, str]:
     }
 
 
+def get_chunks(source: str) -> list[Document]:
+    """
+    Return every stored chunk of this source, ordered by page then chunk index.
+
+    Chroma does not guarantee an order, so the chunks are sorted here.
+    """
+    result = vectorstore.get(
+        where={"source": source}, include=["documents", "metadatas"]
+    )
+
+    chunks = [
+        Document(id=chunk_id, page_content=content, metadata=metadata)
+        for chunk_id, content, metadata in zip(
+            result["ids"], result["documents"], result["metadatas"], strict=True
+        )
+    ]
+
+    return sorted(
+        chunks,
+        key=lambda chunk: (chunk.metadata["page"], chunk.metadata["chunk_index"]),
+    )
+
+
 def save_chunks(chunks: list[Document]) -> None:
     """Embed and store chunks. Chroma upserts, so this also replaces old vectors."""
     if not chunks:
