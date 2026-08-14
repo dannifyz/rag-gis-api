@@ -58,6 +58,7 @@ uv run pre-commit run --all-files
 | `uv run rag-gis-api` | start FastAPI ด้วย uvicorn ที่ `127.0.0.1:8000` (reload เมื่อ `ENV=local`) |
 | `uv run rag-gis-ingest` | ingest PDF ทุกไฟล์ใน `documents/` เข้า vector store (ข้ามไฟล์ที่ไม่เปลี่ยน) |
 | `uv run rag-gis-ingest <path>` | ingest เฉพาะไฟล์เดียว โดย path อ้างจาก `documents/` |
+| `uv run rag-gis-ingest <folder>` | ingest ทุกไฟล์ในโฟลเดอร์นั้น รวม subfolder เช่น `law/min_notif` |
 | `uv run rag-gis-ingest --reset` | ลบ chunk ทั้งหมดทิ้งก่อน แล้ว ingest ใหม่ทั้งหมด |
 | `uv run rag-gis-ingest --clear` | ลบ chunk ทั้งหมดอย่างเดียว ไม่ ingest ต่อ |
 | `uv run rag-gis-load-pdf` | อ่าน PDF ใน `documents/` แล้ว print เนื้อหาแต่ละหน้า ใช้ตรวจว่า PyPDF อ่านไฟล์ออกไหม |

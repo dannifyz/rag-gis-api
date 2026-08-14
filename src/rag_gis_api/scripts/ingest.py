@@ -48,7 +48,10 @@ def main() -> None:
     parser.add_argument(
         "pdf",
         nargs="?",
-        help=f"Path relative to {DATA_PATH} (default: every PDF found).",
+        help=(
+            f"File or folder relative to {DATA_PATH}; a folder ingests every PDF "
+            "under it (default: every PDF found)."
+        ),
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -73,10 +76,10 @@ def main() -> None:
     if args.reset:
         print(f"Reset: removed {clear_vectorstore()} chunks")
 
-    if args.pdf:
-        paths = [DATA_PATH / args.pdf]
-    else:
-        paths = sorted(DATA_PATH.rglob("*.pdf"))
+    target = DATA_PATH / args.pdf if args.pdf else DATA_PATH
+
+    # A folder ingests every PDF under it, a file ingests just that file.
+    paths = sorted(target.rglob("*.pdf")) if target.is_dir() else [target]
 
     results = ingest_all_files(paths)
 
