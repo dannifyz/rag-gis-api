@@ -16,4 +16,10 @@ wheels/
 chroma_db/
 
 # Retrivable documents
-documents/
+documents/*
+!documents/.gitkeep
+
+#all documents
+raw_data/
+
+CLAUDE.local.md
