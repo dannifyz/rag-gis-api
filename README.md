@@ -75,12 +75,39 @@ event: done
 data: {"answer": "ไม่พบข้อมูล...", "sources": [{"source": "ประกาศกระทรวง_Min_Notif/PDF ต้นฉบับ/Min_Notif_031.pdf", "pages": [9]}]}
 ```
 
-ทดสอบจาก terminal — ต้องเรียก `curl.exe` ตรง ๆ เพราะใน PowerShell `curl` เป็น alias ของ
-`Invoke-WebRequest` ซึ่งรอโหลดจนจบก่อนค่อย print เลยไม่เห็นว่ามัน stream:
+ทดสอบจาก terminal ด้วย `rag-gis-chat` — เปิด server ค้างไว้อีก terminal นึงก่อน:
 
 ```bash
-curl.exe -N "http://127.0.0.1:8000/api/chat/stream?question=การขออนุญาตก่อสร้างมีขั้นตอนอย่างไร"
+uv run rag-gis-chat "การขออนุญาตก่อสร้างมีขั้นตอนอย่างไร"
 ```
+
+```
+Q: การขออนุญาตก่อสร้างมีขั้นตอนอย่างไร
+
+[  0.1s] กำลังค้นหาเอกสาร...
+[  0.7s] พบเอกสารที่เกี่ยวข้อง 5 รายการ
+[  0.7s] กำลังสร้างคำตอบ...
+ไม่พบข้อมูลเกี่ยวกับขั้นตอนการขออนุญาตก่อสร้างในเอกสารที่ให้มา เอกสารระบุเพียงว่า...
+
+[  5.2s] done
+  - ประกาศกระทรวง_Min_Notif/PDF ต้นฉบับ/Min_Notif_031.pdf หน้า 9
+  - ประกาศกระทรวง_Min_Notif/PDF ต้นฉบับ/Min_Notif_045.pdf หน้า 8, 9
+```
+
+เวลาหน้าบรรทัดคือจุดสำคัญ: มันบอกว่า status ขึ้นตั้งแต่วินาทีแรก ไม่ได้รอจนคำตอบเสร็จค่อยโผล่มาพร้อมกัน
+
+ถ้าจะดู event ดิบ ๆ ใช้ curl ก็ได้ แต่ต้องครบสามอย่างนี้:
+
+```bash
+curl.exe -N -G "http://127.0.0.1:8000/api/chat/stream" --data-urlencode "question=การขออนุญาตก่อสร้างมีขั้นตอนอย่างไร"
+```
+
+- `curl.exe` ไม่ใช่ `curl` — ใน PowerShell `curl` เป็น alias ของ `Invoke-WebRequest` ซึ่งรอโหลดจนจบก่อนค่อย print
+- `-N` ปิด buffer ของ curl เอง ไม่งั้นก็ไม่เห็นว่ามันทยอยมา
+- `-G --data-urlencode` ไม่ใช่การต่อ `?question=` ตรง ๆ — curl ไม่ percent-encode ให้ ถ้าใส่ภาษาไทยดิบ ๆ
+  ลงใน URL มันจะส่ง byte พวกนั้นในบรรทัดแรกของ HTTP request ซึ่งผิดสเปค uvicorn จะตอบ
+  `Invalid HTTP request received.` กลับมาโดยที่ FastAPI ไม่เห็น request เลย (เบราว์เซอร์ไม่เจอปัญหานี้
+  เพราะ encode ให้เอง)
 
 ฝั่ง frontend ใช้ `EventSource` ได้เลย:
 
@@ -134,6 +161,8 @@ uv run pre-commit run --all-files
 | คำสั่ง | ทำอะไร |
 | --- | --- |
 | `uv run rag-gis-api` | start FastAPI ด้วย uvicorn ที่ `127.0.0.1:8000` (reload เมื่อ `ENV=local`) |
+| `uv run rag-gis-chat "<คำถาม>"` | ถาม API ที่รันอยู่ผ่าน SSE แล้ว print แต่ละ event พร้อมเวลาที่ได้รับ ใช้ตรวจว่า stream ทำงานจริง (ต้องเปิด `rag-gis-api` ค้างไว้ก่อน) |
+| `uv run rag-gis-chat "<คำถาม>" --url <url>` | ชี้ไป endpoint อื่น เช่นตอนรัน server คนละ port |
 | `uv run rag-gis-ingest` | ingest PDF ทุกไฟล์ใน `documents/` เข้า vector store (ข้ามไฟล์ที่ไม่เปลี่ยน) |
 | `uv run rag-gis-ingest <path>` | ingest เฉพาะไฟล์เดียว โดย path อ้างจาก `documents/` |
 | `uv run rag-gis-ingest <folder>` | ingest ทุกไฟล์ในโฟลเดอร์นั้น รวม subfolder เช่น `law/min_notif` |
