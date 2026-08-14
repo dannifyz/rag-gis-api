@@ -15,6 +15,13 @@ uv sync
 uv run pre-commit install
 ```
 
+สร้างไฟล์ `.env` ที่ root (ไม่ commit ขึ้น repo) ใส่ API key ของ Gemini ไม่งั้นโปรแกรมจะ error ตั้งแต่ import:
+
+```
+GOOGLE_API_KEY=<your-key>
+ENV=local
+```
+
 รัน API:
 
 ```bash
@@ -49,6 +56,10 @@ uv run pre-commit run --all-files
 | คำสั่ง | ทำอะไร |
 | --- | --- |
 | `uv run rag-gis-api` | start FastAPI ด้วย uvicorn ที่ `127.0.0.1:8000` (reload เมื่อ `ENV=local`) |
+| `uv run rag-gis-ingest` | ingest PDF ทุกไฟล์ใน `documents/` เข้า vector store (ข้ามไฟล์ที่ไม่เปลี่ยน) |
+| `uv run rag-gis-ingest <path>` | ingest เฉพาะไฟล์เดียว โดย path อ้างจาก `documents/` |
+| `uv run rag-gis-ingest --reset` | ลบ chunk ทั้งหมดทิ้งก่อน แล้ว ingest ใหม่ทั้งหมด |
+| `uv run rag-gis-ingest --clear` | ลบ chunk ทั้งหมดอย่างเดียว ไม่ ingest ต่อ |
 | `uv run rag-gis-load-pdf` | อ่าน PDF ใน `documents/` แล้ว print เนื้อหาแต่ละหน้า ใช้ตรวจว่า PyPDF อ่านไฟล์ออกไหม |
 | `uv run rag-gis-load-pdf <path>` | ระบุไฟล์เอง โดย path อ้างจาก `documents/` |
 | `uv run rag-gis-load-pdf <path> --page N` | print เฉพาะหน้า N (เริ่มที่ 0) |
