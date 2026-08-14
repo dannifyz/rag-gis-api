@@ -30,6 +30,84 @@ uv run rag-gis-api
 
 เปิดที่ http://127.0.0.1:8000/api/health
 
+## API
+
+| Endpoint | ทำอะไร |
+| --- | --- |
+| `GET /api/health` | เช็คว่า server ขึ้นแล้ว |
+| `GET /api/chat?question=<คำถาม>` | ค้น chunk ที่เกี่ยวข้องจาก vector store แล้วให้ LLM ตอบ รอจนจบแล้วคืน JSON ก้อนเดียว |
+| `GET /api/chat/stream?question=<คำถาม>` | คำตอบเดียวกัน แต่ทยอยส่งกลับด้วย SSE ระหว่างที่ทำงาน |
+
+ทั้งสอง endpoint ใช้ pipeline เดียวกัน คือค้น `RETRIEVE_LIMIT` chunk แรกที่ใกล้เคียงคำถามที่สุด
+(ตั้งค่าที่ `services/chat_service.py`) แล้วส่งเข้า LLM เป็น context — ถ้า context ไม่มีคำตอบ
+system prompt สั่งให้ตอบว่าไม่พบข้อมูล ไม่ให้เดา
+
+### SSE: `GET /api/chat/stream`
+
+`data` เป็น JSON ทุก event เพราะ SSE แบ่ง event ด้วยบรรทัด ถ้าส่ง token ดิบที่มี `\n` อยู่ข้างใน
+stream จะขาดกลางคัน — JSON escape ให้เอง
+
+| event | data | ส่งตอนไหน |
+| --- | --- | --- |
+| `status` | `{"stage": "retrieving", "message": "..."}` | เริ่มค้นเอกสาร |
+| `status` | `{"stage": "retrieved", "message": "...", "count": 5}` | ค้นเสร็จ รู้แล้วว่าเจอกี่ chunk |
+| `status` | `{"stage": "generating", "message": "..."}` | ส่ง context เข้า LLM แล้ว กำลังรอ token แรก |
+| `token` | `{"text": "..."}` | ทุก chunk ที่ LLM ส่งกลับมา |
+| `done` | `{"answer": "...", "sources": [...]}` | จบแล้ว `answer` คือ token ทั้งหมดต่อกัน |
+| `error` | `{"message": "..."}` | pipeline พัง — stream จบตรงนี้ |
+
+ตัวอย่างที่ได้กลับมา:
+
+```
+event: status
+data: {"stage": "retrieving", "message": "กำลังค้นหาเอกสาร..."}
+
+event: status
+data: {"stage": "retrieved", "message": "พบเอกสารที่เกี่ยวข้อง 5 รายการ", "count": 5}
+
+event: status
+data: {"stage": "generating", "message": "กำลังสร้างคำตอบ..."}
+
+event: token
+data: {"text": "ไม่พบข้อมูลเกี่ยวกับขั้นตอนการขออนุญาตก่อสร้าง..."}
+
+event: done
+data: {"answer": "ไม่พบข้อมูล...", "sources": [{"source": "ประกาศกระทรวง_Min_Notif/PDF ต้นฉบับ/Min_Notif_031.pdf", "pages": [9]}]}
+```
+
+ทดสอบจาก terminal — ต้องเรียก `curl.exe` ตรง ๆ เพราะใน PowerShell `curl` เป็น alias ของ
+`Invoke-WebRequest` ซึ่งรอโหลดจนจบก่อนค่อย print เลยไม่เห็นว่ามัน stream:
+
+```bash
+curl.exe -N "http://127.0.0.1:8000/api/chat/stream?question=การขออนุญาตก่อสร้างมีขั้นตอนอย่างไร"
+```
+
+ฝั่ง frontend ใช้ `EventSource` ได้เลย:
+
+```js
+const source = new EventSource(
+  `http://127.0.0.1:8000/api/chat/stream?question=${encodeURIComponent(question)}`,
+);
+
+source.addEventListener("status", (e) => showStatus(JSON.parse(e.data).message));
+source.addEventListener("token", (e) => appendAnswer(JSON.parse(e.data).text));
+
+source.addEventListener("done", (e) => {
+  showSources(JSON.parse(e.data).sources);
+  source.close(); // ต้องปิดเอง ไม่งั้น EventSource จะ reconnect แล้วถามใหม่ทั้งรอบ
+});
+
+source.addEventListener("error", (e) => {
+  console.error(JSON.parse(e.data).message);
+  source.close();
+});
+```
+
+ข้อจำกัดที่ต้องรู้: state อยู่ในหน่วยความจำของ request นั้นอย่างเดียว ถ้า user กด refresh
+ระหว่าง stream คำตอบที่ขึ้นไปแล้วจะหายและต้องถามใหม่ ถ้าอยากให้ refresh แล้วต่อได้
+ต้องเก็บ job + partial answer ไว้ฝั่ง server แล้วเปลี่ยนเป็น `POST /chat/jobs` +
+`GET /chat/jobs/{id}/stream` ซึ่งยังไม่ได้ทำในรอบนี้
+
 ## Git hook (format ก่อน commit)
 
 ตั้งค่าไว้ที่ `.pre-commit-config.yaml` ใช้ `ruff-format` ทุกครั้งที่ `git commit`
