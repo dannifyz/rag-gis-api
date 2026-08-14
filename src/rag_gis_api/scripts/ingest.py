@@ -3,7 +3,11 @@ import sys
 from pathlib import Path
 
 from rag_gis_api import DATA_PATH
-from rag_gis_api.services.ingest_service import IngestResult, ingest_file
+from rag_gis_api.services.ingest_service import (
+    IngestResult,
+    clear_vectorstore,
+    ingest_file,
+)
 
 
 def ingest_all_files(paths: list[Path]) -> list[IngestResult]:
@@ -46,7 +50,15 @@ def main() -> None:
         nargs="?",
         help=f"Path relative to {DATA_PATH} (default: every PDF found).",
     )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Delete every stored chunk first, then ingest from scratch.",
+    )
     args = parser.parse_args()
+
+    if args.reset:
+        print(f"Reset: removed {clear_vectorstore()} chunks")
 
     if args.pdf:
         paths = [DATA_PATH / args.pdf]

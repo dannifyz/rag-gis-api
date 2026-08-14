@@ -64,3 +64,13 @@ def delete_chunks(chunk_ids: list[str]) -> None:
         return
 
     vectorstore.delete(ids=chunk_ids)
+
+
+def count_chunks() -> int:
+    """Return how many chunks are stored in the collection."""
+    return len(vectorstore.get(include=[])["ids"])
+
+
+def delete_all_chunks() -> None:
+    """Drop the collection and recreate it empty."""
+    vectorstore.reset_collection()
