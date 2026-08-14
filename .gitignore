@@ -14,3 +14,6 @@ wheels/
 
 # Vector store
 chroma_db/
+
+# Retrivable documents
+documents/
