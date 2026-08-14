@@ -50,12 +50,25 @@ def main() -> None:
         nargs="?",
         help=f"Path relative to {DATA_PATH} (default: every PDF found).",
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--reset",
         action="store_true",
         help="Delete every stored chunk first, then ingest from scratch.",
     )
+    mode.add_argument(
+        "--clear",
+        action="store_true",
+        help="Delete every stored chunk and stop, without ingesting.",
+    )
     args = parser.parse_args()
+
+    if args.clear:
+        if args.pdf:
+            parser.error("--clear removes every chunk, so it takes no pdf argument.")
+
+        print(f"Cleared: removed {clear_vectorstore()} chunks")
+        return
 
     if args.reset:
         print(f"Reset: removed {clear_vectorstore()} chunks")
