@@ -2,6 +2,7 @@ import uvicorn
 from fastapi import APIRouter, FastAPI
 
 from rag_gis_api import ENV
+from rag_gis_api.controllers import chat_controller
 
 app = FastAPI(title="rag-gis-api")
 router = APIRouter(prefix="/api")
@@ -11,6 +12,8 @@ router = APIRouter(prefix="/api")
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
+
+router.include_router(chat_controller.router)
 
 app.include_router(router)
 
