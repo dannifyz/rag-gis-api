@@ -27,6 +27,14 @@ uv run rag-gis-api
 
 ตั้งค่าไว้ที่ `.pre-commit-config.yaml` ใช้ `ruff-format` ทุกครั้งที่ `git commit`
 
+ต้องรันคำสั่งนี้ก่อน hook ถึงจะทำงาน:
+
+```bash
+uv run pre-commit install
+```
+
+คำสั่งนี้จะไปสร้างไฟล์ `.git/hooks/pre-commit` ซึ่ง**ไม่ได้ commit ขึ้น repo** ดังนั้นทุกคนที่ clone ใหม่ต้องรันเองครั้งนึง ไม่งั้น `git commit` จะผ่านไปเฉย ๆ โดยไม่เช็ค format
+
 - ถ้าไฟล์ format ไม่ถูก hook จะ fail และ commit ไม่ผ่าน
 - แก้โดยรัน `uv run ruff format .` แล้ว `git add` ไฟล์ที่เปลี่ยน และ commit อีกครั้ง
 
@@ -48,7 +56,6 @@ uv run pre-commit run --all-files
 | `uv run rag-gis-prompt "<คำถาม>"` | ถามคำถามเอง (system prompt กำกับให้ตอบสั้น ๆ ไม่เกิน 2 ประโยค) |
 | `uv run ruff format .` | format โค้ดทั้งโปรเจกต์ |
 | `uv run ruff check .` | ตรวจ lint |
-| `uv run pre-commit install` | ติดตั้ง git hook |
 | `uv run pre-commit run --all-files` | รัน hook กับไฟล์ทั้งหมดโดยไม่ต้อง commit |
 
 ## เพิ่ม dependencies
