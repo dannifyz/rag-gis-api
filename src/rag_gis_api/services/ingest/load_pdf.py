@@ -16,39 +16,87 @@ MIN_READABLE_CHARS = 30
 # there but unreadable.
 CID_PATTERN = re.compile(r"\(cid:\d+\)")
 
-# Share of the visible characters allowed to be control bytes or replacement
-# characters. Pages PyPDF decoded with the wrong font encoding sit well above
-# this (0.11 and up in documents/), readable pages sit at 0.00.
-MAX_JUNK_RATIO = 0.02
 
-# The corpus is Thai law, so a page with next to no Thai letter came out of the
-# wrong code page, e.g. Thai read as Latin-1 ("Àπâ“ 39 √“™°‘®®“πÿ") or left as
-# glyph names ("/afii59723;"). Mis-decoded pages sit at 0.01 and below, while
-# the most Latin-heavy readable pages, the tables of species names, still reach
-# 0.48.
-MIN_THAI_LETTER_RATIO = 0.15
+COMMON_THAI_WORDS = (
+    "ที่",
+    "การ",
+    "และ",
+    "ของ",
+    "ให้",
+    "ใน",
+    "เป็น",
+    "พ.ศ",
+    "ประกาศ",
+    "มาตรา",
+    "ข้อ",
+    "ความ",
+    "หรือ",
+)
+# ฟอนต์ไทยรุ่นเก่า (Angsana, Cordia, Sarabun ฯลฯ) วาดสระและวรรณยุกต์ที่ต้องเลื่อน
+# ตำแหน่งเป็น glyph ใน Private Use Area ตามผังกลางของ Microsoft แต่ ToUnicode ไม่
+# map กลับ ทุกค่าในตารางนี้ decode จากบริบทจริงในคลัง
+PUA_MAP = str.maketrans(
+    {
+        "\uf701": "\u0e34",  # ิ เช่น ปิโตรเคมี
+        "\uf702": "\u0e35",  # ี เช่น ทั้งปี
+        "\uf703": "\u0e36",  # ึ เช่น ฝึกอบรม
+        "\uf704": "\u0e37",  # ื เช่น ฟื้นฟู
+        "\uf710": "\u0e31",  # ั เช่น ฝังกลบ
+        "\uf712": "\u0e47",  # ็ เช่น เป็น
+        "\uf705": "\u0e48",  # ่ เช่น ผู้ป่วย
+        "\uf70a": "\u0e48",  # ่ เช่น เล่ม
+        "\uf713": "\u0e48",  # ่ เช่น ชายฝั่ง
+        "\uf706": "\u0e49",  # ้ เช่น ไฟฟ้า
+        "\uf70b": "\u0e49",  # ้ เช่น หน้า
+        "\uf714": "\u0e49",  # ้ เช่น ปั้นดินเผา
+        "\uf707": "\u0e4a",  # ๊ เช่น โป๊ะ
+        "\uf70c": "\u0e4a",  # ๊ เช่น ก๊าซ
+        "\uf708": "\u0e4b",  # ๋ เช่น ปุ๋ย
+        "\uf709": "\u0e4c",  # ์ เช่น แสตมป์
+        "\uf70e": "\u0e4c",  # ์ เช่น หลักเกณฑ์
+    }
+)
 
-# Below this a page is a table of numbers or a form, not prose, so the Thai
-# check has too little to go on and is skipped.
-MIN_LETTERS_FOR_THAI_CHECK = 20
+MIN_COMMON_WORDS = 2
+
+CONSONANT = "\u0e01-\u0e2e"  # ก - ฮ
+MARK = "\u0e31\u0e34-\u0e3a\u0e47-\u0e4e"  # สระและวรรณยุกต์
+TONE = "\u0e48-\u0e4b"  # วรรณยุกต์
+
+# ช่องว่างที่คั่นพยัญชนะกับสระบน/ล่าง ไม่ใช่ช่องว่างจริง เกิดจากการจัดวาง glyph
+# 'นโยบายและแผนทร ัพยากรธรรมชาต'   →  'นโยบายและแผนทรัพยากรธรรมชาต'
+SPLIT_MARK = re.compile(f"(?<=[{CONSONANT}{MARK}])[ \t]+(?=[{MARK}])")
+
+# นิคหิตกับสระอาที่ควรรวมเป็น ำ อาจมีวรรณยุกต์หรือช่องว่างคั่น
+#'อํานาจ'      →  'อำนาจ'
+SPLIT_SARA_AM = re.compile(f"\u0e4d[ \t]*([{TONE}]?)[ \t]*\u0e32")
+
+# นิคหิตที่หายไปเป็นช่องว่าง
+#'ก าหนดเขตพื้นที่'   →  'กำหนดเขตพื้นที่'
+LOST_NIKHAHIT = re.compile(f"([{CONSONANT}][{TONE}]?) [\u0e32\u0e33]")
+
+
+def normalize_thai(text: str) -> str:
+    """คืนข้อความที่ประกอบ ำ กลับ และแทน glyph PUA ด้วยอักขระไทยจริง"""
+    text = text.translate(PUA_MAP)
+    text = SPLIT_MARK.sub("", text)
+    text = SPLIT_SARA_AM.sub(lambda m: m.group(1) + "\u0e33", text)
+
+    return LOST_NIKHAHIT.sub(lambda m: m.group(1) + "\u0e33", text)
 
 
 def is_junk(character: str) -> bool:
     """Tell whether a character is a decoding failure rather than text."""
-    return character == "�" or unicodedata.category(character) == "Cc"
-
-
-def is_thai(character: str) -> bool:
-    return "฀" <= character <= "๿"
+    return character == "�" or unicodedata.category(character) in ("Cc", "Co")
 
 
 def is_readable(text: str) -> bool:
     """
     Tell whether PyPDF made sense of a page.
 
-    A page fails when it holds (almost) no text, when its glyphs came back as
-    "(cid:NN)" placeholders, when too much of it is control bytes, or when its
-    letters are not Thai. Those are the pages OCR has to redo.
+    A page has to hold enough text, decode without leftover control bytes or
+    unmapped glyphs, and read as Thai prose. Anything else goes to OCR: losing
+    a good page there costs less than letting a garbled one reach the store.
     """
     stripped = text.strip()
 
@@ -58,24 +106,11 @@ def is_readable(text: str) -> bool:
     if CID_PATTERN.search(stripped):
         return False
 
-    visible = [character for character in stripped if not character.isspace()]
-
-    if not visible:
+    if any(is_junk(character) for character in stripped if not character.isspace()):
         return False
 
-    junk = sum(1 for character in visible if is_junk(character))
-
-    if junk / len(visible) > MAX_JUNK_RATIO:
-        return False
-
-    letters = [character for character in visible if character.isalpha()]
-
-    if len(letters) < MIN_LETTERS_FOR_THAI_CHECK:
-        return True
-
-    thai = sum(1 for character in letters if is_thai(character))
-
-    return thai / len(letters) >= MIN_THAI_LETTER_RATIO
+    found = sum(1 for word in COMMON_THAI_WORDS if word in stripped)
+    return found >= MIN_COMMON_WORDS
 
 
 async def read_pages(path: Path, ocr_queue: asyncio.Queue[Document]) -> list[Document]:
