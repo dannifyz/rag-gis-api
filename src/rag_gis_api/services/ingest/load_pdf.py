@@ -16,39 +16,90 @@ MIN_READABLE_CHARS = 30
 # there but unreadable.
 CID_PATTERN = re.compile(r"\(cid:\d+\)")
 
-# Share of the visible characters allowed to be control bytes or replacement
-# characters. Pages PyPDF decoded with the wrong font encoding sit well above
-# this (0.11 and up in documents/), readable pages sit at 0.00.
-MAX_JUNK_RATIO = 0.02
 
-# The corpus is Thai law, so a page with next to no Thai letter came out of the
-# wrong code page, e.g. Thai read as Latin-1 ("Àπâ“ 39 √“™°‘®®“πÿ") or left as
-# glyph names ("/afii59723;"). Mis-decoded pages sit at 0.01 and below, while
-# the most Latin-heavy readable pages, the tables of species names, still reach
-# 0.48.
-MIN_THAI_LETTER_RATIO = 0.15
+COMMON_THAI_WORDS = (
+    "ที่",
+    "การ",
+    "และ",
+    "ของ",
+    "ให้",
+    "ใน",
+    "เป็น",
+    "พ.ศ",
+    "ประกาศ",
+    "มาตรา",
+    "ข้อ",
+    "ความ",
+    "หรือ",
+)
+# Legacy Thai fonts (Angsana, Cordia, Sarabun and the like) draw the vowel and
+# tone marks that have to shift position as glyphs in the Private Use Area,
+# following Microsoft's shared layout, and their ToUnicode maps nothing back.
+# Every entry below was read off real pages in the corpus.
+PUA_MAP = str.maketrans(
+    {
+        "\uf701": "\u0e34",  # ิ as in ปิโตรเคมี
+        "\uf702": "\u0e35",  # ี as in ทั้งปี
+        "\uf703": "\u0e36",  # ึ as in ฝึกอบรม
+        "\uf704": "\u0e37",  # ื as in ฟื้นฟู
+        "\uf710": "\u0e31",  # ั as in ฝังกลบ
+        "\uf712": "\u0e47",  # ็ as in เป็น
+        "\uf705": "\u0e48",  # ่ as in ผู้ป่วย
+        "\uf70a": "\u0e48",  # ่ as in เล่ม
+        "\uf713": "\u0e48",  # ่ as in ชายฝั่ง
+        "\uf706": "\u0e49",  # ้ as in ไฟฟ้า
+        "\uf70b": "\u0e49",  # ้ as in หน้า
+        "\uf714": "\u0e49",  # ้ as in ปั้นดินเผา
+        "\uf707": "\u0e4a",  # ๊ as in โป๊ะ
+        "\uf70c": "\u0e4a",  # ๊ as in ก๊าซ
+        "\uf708": "\u0e4b",  # ๋ as in ปุ๋ย
+        "\uf709": "\u0e4c",  # ์ as in แสตมป์
+        "\uf70e": "\u0e4c",  # ์ as in หลักเกณฑ์
+    }
+)
 
-# Below this a page is a table of numbers or a form, not prose, so the Thai
-# check has too little to go on and is skipped.
-MIN_LETTERS_FOR_THAI_CHECK = 20
+MIN_COMMON_WORDS = 2
+
+CONSONANT = "\u0e01-\u0e2e"  # ก - ฮ
+MARK = "\u0e31\u0e34-\u0e3a\u0e47-\u0e4e"  # vowel and tone marks
+TONE = "\u0e48-\u0e4b"  # tone marks
+
+# A space between a consonant and the mark that sits above or below it is not
+# a space in the text, it comes from how the glyphs were laid out.
+# 'นโยบายและแผนทร ัพยากรธรรมชาต'   →  'นโยบายและแผนทรัพยากรธรรมชาต'
+SPLIT_MARK = re.compile(f"(?<=[{CONSONANT}{MARK}])[ \t]+(?=[{MARK}])")
+
+# นิคหิต and สระอา that should have come back as ำ, sometimes with a tone
+# mark or a space between them.
+#'อํานาจ'      →  'อำนาจ'
+SPLIT_SARA_AM = re.compile(f"\u0e4d[ \t]*([{TONE}]?)[ \t]*\u0e32")
+
+# นิคหิต that came back as a space.
+#'ก าหนดเขตพื้นที่'   →  'กำหนดเขตพื้นที่'
+LOST_NIKHAHIT = re.compile(f"([{CONSONANT}][{TONE}]?) [\u0e32\u0e33]")
+
+
+def normalize_thai(text: str) -> str:
+    """Put ำ back together and swap PUA glyphs for real Thai characters."""
+    text = text.translate(PUA_MAP)
+    text = SPLIT_MARK.sub("", text)
+    text = SPLIT_SARA_AM.sub(lambda m: m.group(1) + "\u0e33", text)
+
+    return LOST_NIKHAHIT.sub(lambda m: m.group(1) + "\u0e33", text)
 
 
 def is_junk(character: str) -> bool:
     """Tell whether a character is a decoding failure rather than text."""
-    return character == "�" or unicodedata.category(character) == "Cc"
-
-
-def is_thai(character: str) -> bool:
-    return "฀" <= character <= "๿"
+    return character == "�" or unicodedata.category(character) in ("Cc", "Co")
 
 
 def is_readable(text: str) -> bool:
     """
     Tell whether PyPDF made sense of a page.
 
-    A page fails when it holds (almost) no text, when its glyphs came back as
-    "(cid:NN)" placeholders, when too much of it is control bytes, or when its
-    letters are not Thai. Those are the pages OCR has to redo.
+    A page has to hold enough text, decode without leftover control bytes or
+    unmapped glyphs, and read as Thai prose. Anything else goes to OCR: losing
+    a good page there costs less than letting a garbled one reach the store.
     """
     stripped = text.strip()
 
@@ -58,32 +109,19 @@ def is_readable(text: str) -> bool:
     if CID_PATTERN.search(stripped):
         return False
 
-    visible = [character for character in stripped if not character.isspace()]
-
-    if not visible:
+    if any(is_junk(character) for character in stripped if not character.isspace()):
         return False
 
-    junk = sum(1 for character in visible if is_junk(character))
-
-    if junk / len(visible) > MAX_JUNK_RATIO:
-        return False
-
-    letters = [character for character in visible if character.isalpha()]
-
-    if len(letters) < MIN_LETTERS_FOR_THAI_CHECK:
-        return True
-
-    thai = sum(1 for character in letters if is_thai(character))
-
-    return thai / len(letters) >= MIN_THAI_LETTER_RATIO
+    found = sum(1 for word in COMMON_THAI_WORDS if word in stripped)
+    return found >= MIN_COMMON_WORDS
 
 
 async def read_pages(path: Path, ocr_queue: asyncio.Queue[Document]) -> list[Document]:
     """
-    Read a PDF page by page and return the pages PyPDF made sense of.
+    Read a PDF page by page and return every page in order.
 
-    Every other page goes on `ocr_queue`, so OCR can pick it up while the next
-    pages are still being read.
+    Pages PyPDF could not read also go on `ocr_queue`, so OCR can fill them in
+    while the next pages are still being read.
     """
     loader = PyPDFLoader(str(path))
     pages = loader.lazy_load()
@@ -105,7 +143,7 @@ async def read_pages(path: Path, ocr_queue: asyncio.Queue[Document]) -> list[Doc
 
 
 async def read_pages_with_ocr(path: Path) -> list[Document]:
-    """Read a PDF, running OCR alongside, and wait for both to finish."""
+    """Read a PDF, running OCR alongside, and return the pages that hold text."""
     ocr_queue: asyncio.Queue[Document] = asyncio.Queue()
     ocr_task = asyncio.create_task(consume_ocr_queue(ocr_queue))
 
@@ -117,7 +155,7 @@ async def read_pages_with_ocr(path: Path) -> list[Document]:
     finally:
         ocr_task.cancel()
 
-    return documents
+    return [page for page in documents if page.page_content]
 
 
 def load_pdf(path: Path) -> list[Document]:
