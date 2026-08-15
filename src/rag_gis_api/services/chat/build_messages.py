@@ -1,6 +1,5 @@
 from langchain_core.documents import Document
 
-
 SYSTEM_PROMPT = (
     "คุณเป็นผู้ช่วยตอบคำถามจากเอกสารกฎหมายและข้อมูลด้าน GIS "
     "ตอบเป็นภาษาไทย กระชับ โดยอ้างอิงจาก context ที่ให้มาเท่านั้น "
@@ -16,8 +15,7 @@ def format_context(chunks: list[Document]) -> str:
         return NO_CONTEXT
 
     return "\n\n".join(
-        f"[{index}] {chunk.metadata['source']} หน้า {chunk.metadata['page']}\n"
-        f"{chunk.page_content}"
+        f"[{index}] {chunk.metadata['source']} หน้า {chunk.metadata['page']}\n{chunk.page_content}"
         for index, chunk in enumerate(chunks, start=1)
     )
 

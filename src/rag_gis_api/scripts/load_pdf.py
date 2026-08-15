@@ -4,7 +4,6 @@ import sys
 from rag_gis_api import DATA_PATH
 from rag_gis_api.services.ingest.load_pdf import load_pdf
 
-
 # Min_Notif_028.pdf is readable by PyPDF.
 DEFAULT_PDF = "law/min_notif/Min_Notif_028.pdf"
 
@@ -13,9 +12,7 @@ def main() -> None:
     # The Windows console defaults to cp1252, which cannot print Thai.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    parser = argparse.ArgumentParser(
-        description="Print page_content of a PDF under documents/."
-    )
+    parser = argparse.ArgumentParser(description="Print page_content of a PDF under documents/.")
     parser.add_argument(
         "pdf",
         nargs="?",

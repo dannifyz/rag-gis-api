@@ -35,9 +35,7 @@ def get_chunks(source: str) -> list[Document]:
 
     Chroma does not guarantee an order, so the chunks are sorted here.
     """
-    result = vectorstore.get(
-        where={"source": source}, include=["documents", "metadatas"]
-    )
+    result = vectorstore.get(where={"source": source}, include=["documents", "metadatas"])
 
     chunks = [
         Document(id=chunk_id, page_content=content, metadata=metadata)

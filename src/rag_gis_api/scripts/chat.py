@@ -7,7 +7,6 @@ import time
 import httpx
 from httpx_sse import aconnect_sse
 
-
 DEFAULT_QUESTION = "การขออนุญาตก่อสร้างมีขั้นตอนอย่างไร"
 DEFAULT_URL = "http://127.0.0.1:8000/api/chat/stream"
 

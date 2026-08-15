@@ -6,7 +6,6 @@ from rag_gis_api.services.chat.build_messages import build_messages
 from rag_gis_api.services.chat.list_sources import list_sources
 from rag_gis_api.services.llm_service import get_llm
 
-
 RETRIEVE_LIMIT = 5
 
 
@@ -39,9 +38,7 @@ async def ask_stream(question: str) -> AsyncIterator[ChatEvent]:
     replay the whole question and pay for the embedding and LLM calls again.
     """
     try:
-        yield ChatEvent(
-            "status", {"stage": "retrieving", "message": "กำลังค้นหาเอกสาร..."}
-        )
+        yield ChatEvent("status", {"stage": "retrieving", "message": "กำลังค้นหาเอกสาร..."})
 
         chunks = await vector_repository.search_chunks(question, RETRIEVE_LIMIT)
 
@@ -53,9 +50,7 @@ async def ask_stream(question: str) -> AsyncIterator[ChatEvent]:
                 "count": len(chunks),
             },
         )
-        yield ChatEvent(
-            "status", {"stage": "generating", "message": "กำลังสร้างคำตอบ..."}
-        )
+        yield ChatEvent("status", {"stage": "generating", "message": "กำลังสร้างคำตอบ..."})
 
         answer = ""
 

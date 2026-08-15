@@ -38,9 +38,7 @@ def main() -> None:
 
     pages = [
         list(page_chunks)
-        for _, page_chunks in groupby(
-            chunks, key=lambda chunk: chunk.metadata.get("page")
-        )
+        for _, page_chunks in groupby(chunks, key=lambda chunk: chunk.metadata.get("page"))
     ]
 
     print(f"{source} -> {len(chunks)} chunks on {len(pages)} pages")

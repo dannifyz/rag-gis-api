@@ -5,7 +5,6 @@ from rag_gis_api.services.ingest.calculate_chunk_metadatas import (
     calculate_chunk_metadatas,
 )
 
-
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 

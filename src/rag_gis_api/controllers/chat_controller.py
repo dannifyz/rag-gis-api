@@ -7,7 +7,6 @@ from sse_starlette.sse import EventSourceResponse
 
 from rag_gis_api.services.chat_service import ask, ask_stream
 
-
 DEFAULT_QUESTION = "สวัสดีครับคุณคือใคร"
 
 router = APIRouter(prefix="/chat", tags=["chat"])

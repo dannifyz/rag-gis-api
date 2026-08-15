@@ -8,7 +8,6 @@ from langchain_core.documents import Document
 
 from rag_gis_api.services.ingest.ocr import consume_ocr_queue
 
-
 # A page shorter than this holds no usable text: a scanned page usually comes
 # back empty, or with just a stray header PyPDF managed to decode.
 MIN_READABLE_CHARS = 30

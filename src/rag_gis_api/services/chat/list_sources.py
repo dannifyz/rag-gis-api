@@ -15,6 +15,5 @@ def list_sources(chunks: list[Document]) -> list[dict[str, object]]:
         pages.setdefault(chunk.metadata["source"], set()).add(chunk.metadata["page"])
 
     return [
-        {"source": source, "pages": sorted(page_numbers)}
-        for source, page_numbers in pages.items()
+        {"source": source, "pages": sorted(page_numbers)} for source, page_numbers in pages.items()
     ]

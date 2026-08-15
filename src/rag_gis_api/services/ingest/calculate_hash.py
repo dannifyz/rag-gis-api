@@ -1,7 +1,6 @@
 import hashlib
 from pathlib import Path
 
-
 # Read large PDFs block by block instead of loading them into memory at once.
 READ_BLOCK_SIZE = 1024 * 1024
 
