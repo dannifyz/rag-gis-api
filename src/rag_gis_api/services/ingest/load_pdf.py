@@ -135,7 +135,6 @@ async def read_pages(path: Path, ocr_queue: asyncio.Queue[Document]) -> list[Doc
         if page is None:
             break
 
-        page.page_content = normalize_thai(page.page_content)
         documents.append(page)
         if not is_readable(page.page_content):
             await ocr_queue.put(page)
