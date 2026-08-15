@@ -30,9 +30,9 @@ uv run rag-gis-api
 
 เปิดที่ http://127.0.0.1:8000/api/health
 
-## Git hook (format ก่อน commit)
+## Git hook (ตรวจ lint + format ก่อน commit)
 
-ตั้งค่าไว้ที่ `.pre-commit-config.yaml` ใช้ `ruff-format` ทุกครั้งที่ `git commit`
+ตั้งค่าไว้ที่ `.pre-commit-config.yaml` ใช้ `ruff-check` และ `ruff-format` ทุกครั้งที่ `git commit`
 
 ต้องรันคำสั่งนี้ก่อน hook ถึงจะทำงาน:
 
@@ -40,10 +40,10 @@ uv run rag-gis-api
 uv run pre-commit install
 ```
 
-คำสั่งนี้จะไปสร้างไฟล์ `.git/hooks/pre-commit` ซึ่ง**ไม่ได้ commit ขึ้น repo** ดังนั้นทุกคนที่ clone ใหม่ต้องรันเองครั้งนึง ไม่งั้น `git commit` จะผ่านไปเฉย ๆ โดยไม่เช็ค format
+คำสั่งนี้จะไปสร้างไฟล์ `.git/hooks/pre-commit` ซึ่ง**ไม่ได้ commit ขึ้น repo** ดังนั้นทุกคนที่ clone ใหม่ต้องรันเองครั้งนึง ไม่งั้น `git commit` จะผ่านไปเฉย ๆ โดยไม่เช็ค format และ lint
 
-- ถ้าไฟล์ format ไม่ถูก hook จะ fail และ commit ไม่ผ่าน
-- แก้โดยรัน `uv run ruff format .` แล้ว `git add` ไฟล์ที่เปลี่ยน และ commit อีกครั้ง
+- ถ้าไฟล์ format ไม่ถูก หรือ lint ไม่ผ่าน hook จะ fail และ commit ไม่ผ่าน
+- แก้โดยรัน `uv run ruff format .` และ `uv run ruff check --fix .` แล้ว `git add` ไฟล์ที่เปลี่ยน และ commit อีกครั้ง
 
 รันด้วยมือทั้งโปรเจกต์:
 
