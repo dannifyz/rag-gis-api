@@ -19,7 +19,7 @@ chroma_db/
 documents/*
 !documents/.gitkeep
 
-#all documents
+# Un-ingested documents
 raw_data/
 
 CLAUDE.local.md
