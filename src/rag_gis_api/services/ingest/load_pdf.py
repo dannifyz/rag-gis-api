@@ -32,52 +32,55 @@ COMMON_THAI_WORDS = (
     "ความ",
     "หรือ",
 )
-# ฟอนต์ไทยรุ่นเก่า (Angsana, Cordia, Sarabun ฯลฯ) วาดสระและวรรณยุกต์ที่ต้องเลื่อน
-# ตำแหน่งเป็น glyph ใน Private Use Area ตามผังกลางของ Microsoft แต่ ToUnicode ไม่
-# map กลับ ทุกค่าในตารางนี้ decode จากบริบทจริงในคลัง
+# Legacy Thai fonts (Angsana, Cordia, Sarabun and the like) draw the vowel and
+# tone marks that have to shift position as glyphs in the Private Use Area,
+# following Microsoft's shared layout, and their ToUnicode maps nothing back.
+# Every entry below was read off real pages in the corpus.
 PUA_MAP = str.maketrans(
     {
-        "\uf701": "\u0e34",  # ิ เช่น ปิโตรเคมี
-        "\uf702": "\u0e35",  # ี เช่น ทั้งปี
-        "\uf703": "\u0e36",  # ึ เช่น ฝึกอบรม
-        "\uf704": "\u0e37",  # ื เช่น ฟื้นฟู
-        "\uf710": "\u0e31",  # ั เช่น ฝังกลบ
-        "\uf712": "\u0e47",  # ็ เช่น เป็น
-        "\uf705": "\u0e48",  # ่ เช่น ผู้ป่วย
-        "\uf70a": "\u0e48",  # ่ เช่น เล่ม
-        "\uf713": "\u0e48",  # ่ เช่น ชายฝั่ง
-        "\uf706": "\u0e49",  # ้ เช่น ไฟฟ้า
-        "\uf70b": "\u0e49",  # ้ เช่น หน้า
-        "\uf714": "\u0e49",  # ้ เช่น ปั้นดินเผา
-        "\uf707": "\u0e4a",  # ๊ เช่น โป๊ะ
-        "\uf70c": "\u0e4a",  # ๊ เช่น ก๊าซ
-        "\uf708": "\u0e4b",  # ๋ เช่น ปุ๋ย
-        "\uf709": "\u0e4c",  # ์ เช่น แสตมป์
-        "\uf70e": "\u0e4c",  # ์ เช่น หลักเกณฑ์
+        "\uf701": "\u0e34",  # ิ as in ปิโตรเคมี
+        "\uf702": "\u0e35",  # ี as in ทั้งปี
+        "\uf703": "\u0e36",  # ึ as in ฝึกอบรม
+        "\uf704": "\u0e37",  # ื as in ฟื้นฟู
+        "\uf710": "\u0e31",  # ั as in ฝังกลบ
+        "\uf712": "\u0e47",  # ็ as in เป็น
+        "\uf705": "\u0e48",  # ่ as in ผู้ป่วย
+        "\uf70a": "\u0e48",  # ่ as in เล่ม
+        "\uf713": "\u0e48",  # ่ as in ชายฝั่ง
+        "\uf706": "\u0e49",  # ้ as in ไฟฟ้า
+        "\uf70b": "\u0e49",  # ้ as in หน้า
+        "\uf714": "\u0e49",  # ้ as in ปั้นดินเผา
+        "\uf707": "\u0e4a",  # ๊ as in โป๊ะ
+        "\uf70c": "\u0e4a",  # ๊ as in ก๊าซ
+        "\uf708": "\u0e4b",  # ๋ as in ปุ๋ย
+        "\uf709": "\u0e4c",  # ์ as in แสตมป์
+        "\uf70e": "\u0e4c",  # ์ as in หลักเกณฑ์
     }
 )
 
 MIN_COMMON_WORDS = 2
 
 CONSONANT = "\u0e01-\u0e2e"  # ก - ฮ
-MARK = "\u0e31\u0e34-\u0e3a\u0e47-\u0e4e"  # สระและวรรณยุกต์
-TONE = "\u0e48-\u0e4b"  # วรรณยุกต์
+MARK = "\u0e31\u0e34-\u0e3a\u0e47-\u0e4e"  # vowel and tone marks
+TONE = "\u0e48-\u0e4b"  # tone marks
 
-# ช่องว่างที่คั่นพยัญชนะกับสระบน/ล่าง ไม่ใช่ช่องว่างจริง เกิดจากการจัดวาง glyph
+# A space between a consonant and the mark that sits above or below it is not
+# a space in the text, it comes from how the glyphs were laid out.
 # 'นโยบายและแผนทร ัพยากรธรรมชาต'   →  'นโยบายและแผนทรัพยากรธรรมชาต'
 SPLIT_MARK = re.compile(f"(?<=[{CONSONANT}{MARK}])[ \t]+(?=[{MARK}])")
 
-# นิคหิตกับสระอาที่ควรรวมเป็น ำ อาจมีวรรณยุกต์หรือช่องว่างคั่น
+# นิคหิต and สระอา that should have come back as ำ, sometimes with a tone
+# mark or a space between them.
 #'อํานาจ'      →  'อำนาจ'
 SPLIT_SARA_AM = re.compile(f"\u0e4d[ \t]*([{TONE}]?)[ \t]*\u0e32")
 
-# นิคหิตที่หายไปเป็นช่องว่าง
+# นิคหิต that came back as a space.
 #'ก าหนดเขตพื้นที่'   →  'กำหนดเขตพื้นที่'
 LOST_NIKHAHIT = re.compile(f"([{CONSONANT}][{TONE}]?) [\u0e32\u0e33]")
 
 
 def normalize_thai(text: str) -> str:
-    """คืนข้อความที่ประกอบ ำ กลับ และแทน glyph PUA ด้วยอักขระไทยจริง"""
+    """Put ำ back together and swap PUA glyphs for real Thai characters."""
     text = text.translate(PUA_MAP)
     text = SPLIT_MARK.sub("", text)
     text = SPLIT_SARA_AM.sub(lambda m: m.group(1) + "\u0e33", text)
