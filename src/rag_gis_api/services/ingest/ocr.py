@@ -15,9 +15,6 @@ async def consume_ocr_queue(ocr_queue: asyncio.Queue[Document]) -> None:
         page = await ocr_queue.get()
 
         try:
-            print(
-                f"OCR  {page.metadata.get('source')} "
-                f"page {page.metadata.get('page')} (dropped)"
-            )
+            print(f"OCR  {page.metadata.get('source')} page {page.metadata.get('page')} (dropped)")
         finally:
             ocr_queue.task_done()

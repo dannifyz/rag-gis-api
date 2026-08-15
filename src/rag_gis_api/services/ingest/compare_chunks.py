@@ -39,8 +39,6 @@ def compare_chunks(
         else:
             diff.unchanged.append(chunk)
 
-    diff.to_delete_ids = [
-        chunk_id for chunk_id in existing_hashes if chunk_id not in new_by_id
-    ]
+    diff.to_delete_ids = [chunk_id for chunk_id in existing_hashes if chunk_id not in new_by_id]
 
     return diff

@@ -12,9 +12,7 @@ def main() -> None:
     # The Windows console defaults to cp1252, which cannot print Thai.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    parser = argparse.ArgumentParser(
-        description="Print page_content of a PDF under documents/."
-    )
+    parser = argparse.ArgumentParser(description="Print page_content of a PDF under documents/.")
     parser.add_argument(
         "pdf",
         nargs="?",

@@ -11,9 +11,7 @@ def main() -> None:
     # The Windows console defaults to cp1252, which cannot print Thai.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    parser = argparse.ArgumentParser(
-        description="Send one prompt to the LLM and print the answer."
-    )
+    parser = argparse.ArgumentParser(description="Send one prompt to the LLM and print the answer.")
     parser.add_argument(
         "question",
         nargs="?",
