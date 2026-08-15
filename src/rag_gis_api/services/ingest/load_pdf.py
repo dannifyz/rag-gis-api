@@ -115,10 +115,10 @@ def is_readable(text: str) -> bool:
 
 async def read_pages(path: Path, ocr_queue: asyncio.Queue[Document]) -> list[Document]:
     """
-    Read a PDF page by page and return the pages PyPDF made sense of.
+    Read a PDF page by page and return every page in order.
 
-    Every other page goes on `ocr_queue`, so OCR can pick it up while the next
-    pages are still being read.
+    Pages PyPDF could not read also go on `ocr_queue`, so OCR can fill them in
+    while the next pages are still being read.
     """
     loader = PyPDFLoader(str(path))
     pages = loader.lazy_load()
@@ -132,16 +132,16 @@ async def read_pages(path: Path, ocr_queue: asyncio.Queue[Document]) -> list[Doc
         if page is None:
             break
 
-        if is_readable(page.page_content):
-            documents.append(page)
-        else:
+        page.page_content = normalize_thai(page.page_content)
+        documents.append(page)
+        if not is_readable(page.page_content):
             await ocr_queue.put(page)
 
     return documents
 
 
 async def read_pages_with_ocr(path: Path) -> list[Document]:
-    """Read a PDF, running OCR alongside, and wait for both to finish."""
+    """Read a PDF, running OCR alongside, and return the pages that hold text."""
     ocr_queue: asyncio.Queue[Document] = asyncio.Queue()
     ocr_task = asyncio.create_task(consume_ocr_queue(ocr_queue))
 
@@ -153,7 +153,7 @@ async def read_pages_with_ocr(path: Path) -> list[Document]:
     finally:
         ocr_task.cancel()
 
-    return documents
+    return [page for page in documents if page.page_content]
 
 
 def load_pdf(path: Path) -> list[Document]:
