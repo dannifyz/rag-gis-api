@@ -78,7 +78,7 @@ def read_content(message: dict) -> str:
     return parsed.get("natural_text", content) if isinstance(parsed, dict) else content
 
 
-async def extract_text_from_image(image: bytes) -> str:
+async def extract_text_from_image(client: httpx.AsyncClient, image: bytes) -> str:
     """Send one rendered page to Typhoon OCR and return the text it read."""
     files = {"file": ("page.png", image, "image/png")}
 
@@ -93,8 +93,7 @@ async def extract_text_from_image(image: bytes) -> str:
 
     headers = {"Authorization": f"Bearer {TYPHOON_API_KEY}"}
 
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        response = await client.post(URL, files=files, data=data, headers=headers)
+    response = await client.post(URL, files=files, data=data, headers=headers)
 
     if response.status_code != 200:
         raise OcrError(f"HTTP {response.status_code}: {response.text[:200]}")
@@ -123,26 +122,27 @@ async def consume_ocr_queue(
     failures: list[OcrFailure],
 ) -> None:
     """Fill in the pages PyPDF could not read, one at a time."""
-    while True:
-        page = await ocr_queue.get()
-        source = page.metadata["source"]
-        page_number = page.metadata["page"]
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        while True:
+            page = await ocr_queue.get()
+            source = page.metadata["source"]
+            page_number = page.metadata["page"]
 
-        try:
-            # Rendering is CPU-bound, so it goes off the event loop as well.
-            image = await asyncio.to_thread(render_page, source, page_number)
-            page.page_content = await extract_text_from_image(image)
+            try:
+                # Rendering is CPU-bound, so it goes off the event loop as well.
+                image = await asyncio.to_thread(render_page, source, page_number)
+                page.page_content = await extract_text_from_image(client, image)
 
-            read = f"{len(page.page_content)} chars" if page.page_content else "no text"
+                read = f"{len(page.page_content)} chars" if page.page_content else "no text"
 
-            print(f"OCR:  {source} page {page_number} ({read})")
-        except Exception as error:
-            failures.append(
-                OcrFailure(
-                    source=source,
-                    page=page_number,
-                    error=f"{type(error).__name__}: {error}",
+                print(f"OCR:  {source} page {page_number} ({read})")
+            except Exception as error:
+                failures.append(
+                    OcrFailure(
+                        source=source,
+                        page=page_number,
+                        error=f"{type(error).__name__}: {error}",
+                    )
                 )
-            )
-        finally:
-            ocr_queue.task_done()
+            finally:
+                ocr_queue.task_done()
