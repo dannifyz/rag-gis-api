@@ -1,10 +1,11 @@
 import asyncio
 import io
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
 import pypdfium2
-import requests
 from langchain_core.documents import Document
 
 from rag_gis_api import TYPHOON_API_KEY
@@ -33,6 +34,22 @@ URL = "https://api.opentyphoon.ai/v1/ocr"
 # keeps the tone marks crisp without inventing detail the original never held.
 RENDER_DPI = 400
 
+# A dense scan takes the vision model a while, so the timeout is generous.
+TIMEOUT = 120
+
+
+class OcrError(Exception):
+    """OCR could not read a page. Not the same as a page that holds no text."""
+
+
+@dataclass
+class OcrFailure:
+    """A page OCR could not read, kept so the caller can fail the whole file."""
+
+    source: str
+    page: int
+    error: str
+
 
 def render_page(path: Path, page_number: int) -> bytes:
     """Render the page PyPDF could not read as a PNG for OCR to pick up."""
@@ -49,9 +66,20 @@ def render_page(path: Path, page_number: int) -> bytes:
     return buffer.getvalue()
 
 
-def extract_text_from_image(
-    image,
-):
+def read_content(message: dict) -> str:
+    """Pull the text out of one OCR result."""
+    content = message["choices"][0]["message"]["content"]
+
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return content
+
+    return parsed.get("natural_text", content) if isinstance(parsed, dict) else content
+
+
+async def extract_text_from_image(image: bytes) -> str:
+    """Send one rendered page to Typhoon OCR and return the text it read."""
     files = {"file": ("page.png", image, "image/png")}
 
     data = {
@@ -65,44 +93,56 @@ def extract_text_from_image(
 
     headers = {"Authorization": f"Bearer {TYPHOON_API_KEY}"}
 
-    response = requests.post(URL, files=files, data=data, headers=headers)
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        response = await client.post(URL, files=files, data=data, headers=headers)
 
-    if response.status_code == 200:
-        result = response.json()
+    if response.status_code != 200:
+        raise OcrError(f"HTTP {response.status_code}: {response.text[:200]}")
 
-        # Extract text from successful results
-        extracted_texts = []
-        for page_result in result.get("results", []):
-            if page_result.get("success") and page_result.get("message"):
-                content = page_result["message"]["choices"][0]["message"]["content"]
-                try:
-                    # Try to parse as JSON if it's structured output
-                    parsed_content = json.loads(content)
-                    text = parsed_content.get("natural_text", content)
-                except json.JSONDecodeError:
-                    text = content
-                extracted_texts.append(text)
-            elif not page_result.get("success"):
-                filename = page_result.get("filename", "unknown")
-                error = page_result.get("error", "Unknown error")
+    results = response.json().get("results", [])
 
-                print(f"Error processing {filename}: {error}")
+    if not results:
+        raise OcrError("the service returned no result for this page")
 
-        return "\n".join(extracted_texts)
-    else:
-        print(f"Error: {response.status_code}")
-        print(response.text)
-        return None
+    contents, errors = [], []
+
+    for result in results:
+        if result.get("success") and result.get("message"):
+            contents.append(read_content(result["message"]))
+        else:
+            errors.append(result.get("error", "unknown error"))
+
+    if errors:
+        raise OcrError("; ".join(errors))
+
+    return "\n".join(contents).strip()
 
 
-async def consume_ocr_queue(ocr_queue: asyncio.Queue[Document]) -> None:
-    """Drain the pages PyPDF could not read."""
+async def consume_ocr_queue(
+    ocr_queue: asyncio.Queue[Document],
+    failures: list[OcrFailure],
+) -> None:
+    """Fill in the pages PyPDF could not read, one at a time."""
     while True:
         page = await ocr_queue.get()
+        source = page.metadata["source"]
+        page_number = page.metadata["page"]
+
         try:
-            page.page_content = extract_text_from_image(
-                render_page(page.metadata["source"], page.metadata["page"])
+            # Rendering is CPU-bound, so it goes off the event loop as well.
+            image = await asyncio.to_thread(render_page, source, page_number)
+            page.page_content = await extract_text_from_image(image)
+
+            read = f"{len(page.page_content)} chars" if page.page_content else "no text"
+
+            print(f"OCR:  {source} page {page_number} ({read})")
+        except Exception as error:
+            failures.append(
+                OcrFailure(
+                    source=source,
+                    page=page_number,
+                    error=f"{type(error).__name__}: {error}",
+                )
             )
-            print(f"OCR:  {page.metadata.get('source')} page {page.metadata.get('page')}")
         finally:
             ocr_queue.task_done()

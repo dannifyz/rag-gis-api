@@ -15,10 +15,12 @@ uv sync
 uv run pre-commit install
 ```
 
-สร้างไฟล์ `.env` ที่ root (ไม่ commit ขึ้น repo) ใส่ API key ของ Gemini ไม่งั้นโปรแกรมจะ error ตั้งแต่ import:
+สร้างไฟล์ `.env` ที่ root (ไม่ commit ขึ้น repo) ใส่ API key ของ Gemini กับ Typhoon OCR
+**ต้องมีทั้งสองตัว** ไม่งั้นโปรแกรมจะ error ตั้งแต่ import:
 
 ```
 GOOGLE_API_KEY=<your-key>
+TYPHOON_API_KEY=<your-key>
 ENV=local
 ```
 

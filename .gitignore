@@ -21,5 +21,6 @@ documents/*
 
 # Un-ingested documents
 raw_data/
+knowledges/
 
 CLAUDE.local.md

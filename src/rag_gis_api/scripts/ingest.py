@@ -10,10 +10,11 @@ from rag_gis_api.services.ingest_service import (
 )
 
 
-def ingest_all_files(paths: list[Path]) -> list[IngestResult]:
+def ingest_all_files(paths: list[Path]) -> tuple[list[IngestResult], list[str]]:
+    """Ingest every path and return what succeeded, and the sources that failed."""
     print(f"Found {len(paths)} PDF files")
 
-    results = []
+    results, failed = [], []
 
     for path in paths:
         source = path.relative_to(DATA_PATH).as_posix()
@@ -23,6 +24,7 @@ def ingest_all_files(paths: list[Path]) -> list[IngestResult]:
         except Exception as e:
             print(f"FAILED: {source}")
             print(e)
+            failed.append(source)
             continue
 
         results.append(result)
@@ -35,7 +37,7 @@ def ingest_all_files(paths: list[Path]) -> list[IngestResult]:
                 f"(+{result.inserted} ~{result.updated} -{result.deleted})"
             )
 
-    return results
+    return results, failed
 
 
 def main() -> None:
@@ -81,7 +83,7 @@ def main() -> None:
     # A folder ingests every PDF under it, a file ingests just that file.
     paths = sorted(target.rglob("*.pdf")) if target.is_dir() else [target]
 
-    results = ingest_all_files(paths)
+    results, failed = ingest_all_files(paths)
 
     print(
         f"\nDone: {len(results)} files, "
@@ -89,3 +91,11 @@ def main() -> None:
         f"~{sum(r.updated for r in results)} "
         f"-{sum(r.deleted for r in results)} chunks"
     )
+
+    if failed:
+        print(f"\nFailed: {len(failed)} files - nothing stored, run again to retry")
+
+        for source in failed:
+            print(f"  - {source}")
+
+        sys.exit(1)
