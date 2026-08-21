@@ -1,12 +1,23 @@
 import asyncio
 import re
 import unicodedata
+from contextlib import suppress
 from pathlib import Path
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
 
-from rag_gis_api.services.ingest.ocr import consume_ocr_queue
+from rag_gis_api.services.ingest.ocr import OcrFailure, consume_ocr_queue
+
+
+class UnreadablePdfError(Exception):
+    """OCR could not read a page, so the file cannot be ingested as a whole."""
+
+    def __init__(self, path: Path, failures: list[OcrFailure]) -> None:
+        detail = "; ".join(f"page {failure.page}: {failure.error}" for failure in failures)
+
+        super().__init__(f"OCR failed on {len(failures)} page(s) of {path} - {detail}")
+
 
 # A page shorter than this holds no usable text: a scanned page usually comes
 # back empty, or with just a stray header PyPDF managed to decode.
@@ -135,6 +146,8 @@ async def read_pages(path: Path, ocr_queue: asyncio.Queue[Document]) -> list[Doc
         if page is None:
             break
 
+        page.page_content = normalize_thai(page.page_content)
+
         documents.append(page)
         if not is_readable(page.page_content):
             await ocr_queue.put(page)
@@ -142,18 +155,44 @@ async def read_pages(path: Path, ocr_queue: asyncio.Queue[Document]) -> list[Doc
     return documents
 
 
+async def wait_for_ocr(ocr_queue: asyncio.Queue[Document], ocr_task: asyncio.Task[None]) -> None:
+    """Wait until OCR has taken every queued page."""
+    drained = asyncio.create_task(ocr_queue.join())
+
+    done, _ = await asyncio.wait({drained, ocr_task}, return_when=asyncio.FIRST_COMPLETED)
+
+    if ocr_task not in done:
+        return
+
+    drained.cancel()
+
+    with suppress(asyncio.CancelledError):
+        await drained
+
+    ocr_task.result()
+
+    raise RuntimeError("the OCR worker stopped before the queue was drained")
+
+
 async def read_pages_with_ocr(path: Path) -> list[Document]:
     """Read a PDF, running OCR alongside, and return the pages that hold text."""
     ocr_queue: asyncio.Queue[Document] = asyncio.Queue()
-    ocr_task = asyncio.create_task(consume_ocr_queue(ocr_queue))
+    failures: list[OcrFailure] = []
+    ocr_task = asyncio.create_task(consume_ocr_queue(ocr_queue, failures))
 
     try:
         documents = await read_pages(path, ocr_queue)
 
         # OCR runs behind the reader, so give it the pages left in the queue.
-        await ocr_queue.join()
+        await wait_for_ocr(ocr_queue, ocr_task)
     finally:
         ocr_task.cancel()
+
+        with suppress(asyncio.CancelledError):
+            await ocr_task
+
+    if failures:
+        raise UnreadablePdfError(path, failures)
 
     return [page for page in documents if page.page_content]
 
