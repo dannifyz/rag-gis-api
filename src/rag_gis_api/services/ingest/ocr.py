@@ -9,6 +9,7 @@ import pypdfium2
 from langchain_core.documents import Document
 
 from rag_gis_api import TYPHOON_API_KEY
+from rag_gis_api.services.ingest.calculate_chunk_metadatas import normalize_source
 
 MODEL = "typhoon-ocr"
 
@@ -128,12 +129,14 @@ async def _ocr_worker(
     """Fill in the pages PyPDF could not read, one at a time."""
     while True:
         page = await ocr_queue.get()
-        source = page.metadata["source"]
+        path = page.metadata["source"]
         page_number = page.metadata["page"]
+
+        source = normalize_source(path)
 
         try:
             # Rendering is CPU-bound, so it goes off the event loop as well.
-            image = await asyncio.to_thread(render_page, source, page_number)
+            image = await asyncio.to_thread(render_page, path, page_number)
             page.page_content = await extract_text_from_image(client, image)
 
             read = f"{len(page.page_content)} chars" if page.page_content else "no text"

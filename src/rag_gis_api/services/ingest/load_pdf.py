@@ -13,10 +13,11 @@ from rag_gis_api.services.ingest.ocr import OcrFailure, consume_ocr_queue
 class UnreadablePdfError(Exception):
     """OCR could not read a page, so the file cannot be ingested as a whole."""
 
-    def __init__(self, path: Path, failures: list[OcrFailure]) -> None:
+    def __init__(self, failures: list[OcrFailure]) -> None:
+        source = failures[0].source
         detail = "; ".join(f"page {failure.page}: {failure.error}" for failure in failures)
 
-        super().__init__(f"OCR failed on {len(failures)} page(s) of {path} - {detail}")
+        super().__init__(f"OCR failed on {len(failures)} page(s) of {source} - {detail}")
 
 
 # A page shorter than this holds no usable text: a scanned page usually comes
@@ -192,7 +193,7 @@ async def read_pages_with_ocr(path: Path) -> list[Document]:
             await ocr_task
 
     if failures:
-        raise UnreadablePdfError(path, failures)
+        raise UnreadablePdfError(failures)
 
     return [page for page in documents if page.page_content]
 
