@@ -37,6 +37,9 @@ RENDER_DPI = 400
 # A dense scan takes the vision model a while, so the timeout is generous.
 TIMEOUT = 120
 
+# OCR is network-bound, so several pages can be in flight at once.
+OCR_CONCURRENCY = 4
+
 
 class OcrError(Exception):
     """OCR could not read a page. Not the same as a page that holds no text."""
@@ -117,32 +120,52 @@ async def extract_text_from_image(client: httpx.AsyncClient, image: bytes) -> st
     return "\n".join(contents).strip()
 
 
-async def consume_ocr_queue(
+async def _ocr_worker(
+    client: httpx.AsyncClient,
     ocr_queue: asyncio.Queue[Document],
     failures: list[OcrFailure],
 ) -> None:
     """Fill in the pages PyPDF could not read, one at a time."""
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        while True:
-            page = await ocr_queue.get()
-            source = page.metadata["source"]
-            page_number = page.metadata["page"]
+    while True:
+        page = await ocr_queue.get()
+        source = page.metadata["source"]
+        page_number = page.metadata["page"]
 
-            try:
-                # Rendering is CPU-bound, so it goes off the event loop as well.
-                image = await asyncio.to_thread(render_page, source, page_number)
-                page.page_content = await extract_text_from_image(client, image)
+        try:
+            # Rendering is CPU-bound, so it goes off the event loop as well.
+            image = await asyncio.to_thread(render_page, source, page_number)
+            page.page_content = await extract_text_from_image(client, image)
 
-                read = f"{len(page.page_content)} chars" if page.page_content else "no text"
+            read = f"{len(page.page_content)} chars" if page.page_content else "no text"
 
-                print(f"OCR:  {source} page {page_number} ({read})")
-            except Exception as error:
-                failures.append(
-                    OcrFailure(
-                        source=source,
-                        page=page_number,
-                        error=f"{type(error).__name__}: {error}",
-                    )
+            print(f"OCR:  {source} page {page_number} ({read})")
+        except Exception as error:
+            failures.append(
+                OcrFailure(
+                    source=source,
+                    page=page_number,
+                    error=f"{type(error).__name__}: {error}",
                 )
-            finally:
-                ocr_queue.task_done()
+            )
+        finally:
+            ocr_queue.task_done()
+
+
+async def consume_ocr_queue(
+    ocr_queue: asyncio.Queue[Document],
+    failures: list[OcrFailure],
+) -> None:
+    """Run OCR workers in parallel until cancelled, sharing one client."""
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        workers = [
+            asyncio.create_task(_ocr_worker(client, ocr_queue, failures))
+            for _ in range(OCR_CONCURRENCY)
+        ]
+
+        try:
+            await asyncio.gather(*workers)
+        finally:
+            for worker in workers:
+                worker.cancel()
+
+            await asyncio.gather(*workers, return_exceptions=True)
