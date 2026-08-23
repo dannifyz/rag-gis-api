@@ -24,6 +24,14 @@ TYPHOON_API_KEY=<your-key>
 ENV=local
 ```
 
+`REDIS_URL` เป็น optional (default `redis://localhost:6379/0`) — ใช้เก็บ conversation history เมื่อเรียก `/chat` หรือ `/chat/stream` พร้อม `session_id` เท่านั้น ไม่ใส่ `session_id` ก็ยังใช้งานได้ปกติแบบไม่มี memory
+
+รัน Redis (ต้องมี Docker):
+
+```bash
+docker compose up -d redis
+```
+
 รัน API:
 
 ```bash
@@ -59,6 +67,7 @@ uv run pre-commit run --all-files
 | --- | --- |
 | `uv run rag-gis-api` | start FastAPI ด้วย uvicorn ที่ `127.0.0.1:8000` (reload เมื่อ `ENV=local`) |
 | `uv run rag-gis-chat "<คำถาม>"` | ถาม API ที่รันอยู่ผ่าน SSE แล้ว print แต่ละ event พร้อมเวลาที่ได้รับ ต้องเปิด `rag-gis-api` ค้างไว้ก่อน — รายละเอียดที่ [`services/chat/README.md`](src/rag_gis_api/services/chat/README.md) |
+| `uv run rag-gis-chat "<คำถาม>" --session-id foo` | เหมือนข้างบน แต่ผูก conversation history ไว้กับ id `foo` ใน Redis เรียกซ้ำด้วย id เดิมเพื่อถามคำถามต่อเนื่องได้ (ต้องรัน Redis ไว้ก่อน) |
 | `uv run rag-gis-ingest` | ingest PDF ทุกไฟล์ใน `documents/` เข้า vector store (ข้ามไฟล์ที่ไม่เปลี่ยน) |
 | `uv run rag-gis-ingest <path>` | ingest เฉพาะไฟล์เดียว โดย path อ้างจาก `documents/` |
 | `uv run rag-gis-ingest <folder>` | ingest ทุกไฟล์ในโฟลเดอร์นั้น รวม subfolder เช่น `law/min_notif` |

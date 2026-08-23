@@ -12,19 +12,27 @@ DEFAULT_QUESTION = "สวัสดีครับคุณคือใคร"
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 Question = Annotated[str, Query(description="Question to ask the LLM.")]
+SessionId = Annotated[
+    str | None,
+    Query(description="Conversation id to keep history for. Omit for a stateless call."),
+]
 
 
 @router.get("")
-async def chat(question: Question = DEFAULT_QUESTION) -> dict[str, object]:
-    return {"question": question, **await ask(question)}
+async def chat(
+    question: Question = DEFAULT_QUESTION, session_id: SessionId = None
+) -> dict[str, object]:
+    return {"question": question, **await ask(question, session_id)}
 
 
 @router.get("/stream")
-async def chat_stream(question: Question = DEFAULT_QUESTION) -> EventSourceResponse:
+async def chat_stream(
+    question: Question = DEFAULT_QUESTION, session_id: SessionId = None
+) -> EventSourceResponse:
     """Same answer as GET /chat, but streamed as it is produced."""
 
     async def events() -> AsyncIterator[dict[str, str]]:
-        async for event in ask_stream(question):
+        async for event in ask_stream(question, session_id):
             yield {
                 "event": event.name,
                 # Every payload is JSON: it keeps the shape uniform, and it

@@ -20,9 +20,25 @@ def format_context(chunks: list[Document]) -> str:
     )
 
 
-def build_messages(question: str, chunks: list[Document]) -> list[tuple[str, str]]:
-    """Build the messages sent to the LLM, with the retrieved chunks as context."""
-    return [
-        ("system", SYSTEM_PROMPT),
-        ("human", f"context:\n{format_context(chunks)}\n\nคำถาม: {question}"),
-    ]
+def build_messages(
+    question: str,
+    chunks: list[Document],
+    history: list[tuple[str, str]] | None = None,
+) -> list[tuple[str, str]]:
+    """
+    Build the messages sent to the LLM, with the retrieved chunks as context.
+
+    `history` is this session's past (question, answer) turns, oldest first, so
+    the model can resolve references like "it" or "ต่อจากข้อก่อนหน้า". Only the
+    current question gets fresh RAG context — past turns are replayed as plain
+    conversation, not re-retrieved.
+    """
+    messages: list[tuple[str, str]] = [("system", SYSTEM_PROMPT)]
+
+    for past_question, past_answer in history or []:
+        messages.append(("human", past_question))
+        messages.append(("ai", past_answer))
+
+    messages.append(("human", f"context:\n{format_context(chunks)}\n\nคำถาม: {question}"))
+
+    return messages

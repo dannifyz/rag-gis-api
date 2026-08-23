@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
-from rag_gis_api.repositories import vector_repository
+from rag_gis_api.repositories import session_repository, vector_repository
 from rag_gis_api.services.chat.build_messages import build_messages
 from rag_gis_api.services.chat.list_sources import list_sources
 from rag_gis_api.services.llm_service import get_llm
@@ -17,15 +17,19 @@ class ChatEvent:
     data: dict[str, object]
 
 
-async def ask(question: str) -> dict[str, object]:
+async def ask(question: str, session_id: str | None = None) -> dict[str, object]:
     """Run the whole RAG pipeline and return the finished answer."""
+    history = await session_repository.get_history(session_id) if session_id else []
     chunks = await vector_repository.search_chunks(question, RETRIEVE_LIMIT)
-    response = await get_llm().ainvoke(build_messages(question, chunks))
+    response = await get_llm().ainvoke(build_messages(question, chunks, history))
+
+    if session_id:
+        await session_repository.append_turn(session_id, question, response.text)
 
     return {"answer": response.text, "sources": list_sources(chunks)}
 
 
-async def ask_stream(question: str) -> AsyncIterator[ChatEvent]:
+async def ask_stream(question: str, session_id: str | None = None) -> AsyncIterator[ChatEvent]:
     """
     Run the RAG pipeline and report every stage while it happens.
 
@@ -36,8 +40,14 @@ async def ask_stream(question: str) -> AsyncIterator[ChatEvent]:
     A failure is reported as an `error` event rather than raised: an aborted
     stream makes the browser's EventSource reconnect, which would silently
     replay the whole question and pay for the embedding and LLM calls again.
+
+    `session_id` is optional: without it the call stays stateless, exactly like
+    before. With it, past turns are loaded before answering and this turn is
+    saved after, so the next call with the same id remembers the conversation.
     """
     try:
+        history = await session_repository.get_history(session_id) if session_id else []
+
         yield ChatEvent("status", {"stage": "retrieving", "message": "กำลังค้นหาเอกสาร..."})
 
         chunks = await vector_repository.search_chunks(question, RETRIEVE_LIMIT)
@@ -54,7 +64,7 @@ async def ask_stream(question: str) -> AsyncIterator[ChatEvent]:
 
         answer = ""
 
-        async for chunk in get_llm().astream(build_messages(question, chunks)):
+        async for chunk in get_llm().astream(build_messages(question, chunks, history)):
             # Gemini also emits chunks that only carry metadata, with no text.
             if not chunk.text:
                 continue
@@ -62,6 +72,9 @@ async def ask_stream(question: str) -> AsyncIterator[ChatEvent]:
             answer += chunk.text
 
             yield ChatEvent("token", {"text": chunk.text})
+
+        if session_id:
+            await session_repository.append_turn(session_id, question, answer)
 
         yield ChatEvent("done", {"answer": answer, "sources": list_sources(chunks)})
     except Exception as error:

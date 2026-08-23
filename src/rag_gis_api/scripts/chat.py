@@ -14,17 +14,22 @@ DEFAULT_URL = "http://127.0.0.1:8000/api/chat/stream"
 TIMEOUT = 120
 
 
-async def stream_answer(url: str, question: str) -> int:
+async def stream_answer(url: str, question: str, session_id: str | None = None) -> int:
     """Print every SSE event as it arrives. Returns the exit code."""
     started = time.monotonic()
 
     def elapsed() -> str:
         return f"[{time.monotonic() - started:5.1f}s]"
 
+    params = {"question": question}
+
+    if session_id:
+        params["session_id"] = session_id
+
     async with (
         httpx.AsyncClient(timeout=TIMEOUT) as client,
         # httpx encodes the params, so a Thai question needs no escaping here.
-        aconnect_sse(client, "GET", url, params={"question": question}) as events,
+        aconnect_sse(client, "GET", url, params=params) as events,
     ):
         async for event in events.aiter_sse():
             data = json.loads(event.data)
@@ -68,12 +73,17 @@ def main() -> None:
         default=DEFAULT_URL,
         help=f"Stream endpoint to call (default: {DEFAULT_URL}).",
     )
+    parser.add_argument(
+        "--session-id",
+        default=None,
+        help="Conversation id to keep history for (requires Redis). Omit for a stateless call.",
+    )
     args = parser.parse_args()
 
     print(f"Q: {args.question}\n")
 
     try:
-        exit_code = asyncio.run(stream_answer(args.url, args.question))
+        exit_code = asyncio.run(stream_answer(args.url, args.question, args.session_id))
     except httpx.ConnectError:
         print(f"ต่อ {args.url} ไม่ได้ — สั่ง uv run rag-gis-api ในอีก terminal ก่อน")
         exit_code = 1
