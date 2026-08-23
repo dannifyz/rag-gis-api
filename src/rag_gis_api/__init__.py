@@ -15,6 +15,8 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 TYPHOON_API_KEY = os.getenv("TYPHOON_API_KEY")
 
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
 if not GOOGLE_API_KEY:
     raise RuntimeError(f"GOOGLE_API_KEY not set. Add it to {PROJECT_ROOT / '.env'}")
 
