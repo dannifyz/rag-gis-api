@@ -3,11 +3,8 @@ import sys
 from pathlib import Path
 
 from rag_gis_api import DATA_PATH
-from rag_gis_api.services.ingest_service import (
-    IngestResult,
-    clear_vectorstore,
-    ingest_file,
-)
+from rag_gis_api.services.chunk_service import clear_vectorstore
+from rag_gis_api.services.ingest_service import IngestResult, ingest_file
 
 
 def ingest_all_files(paths: list[Path]) -> tuple[list[IngestResult], list[str]]:
@@ -55,25 +52,12 @@ def main() -> None:
             "under it (default: every PDF found)."
         ),
     )
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument(
+    parser.add_argument(
         "--reset",
         action="store_true",
         help="Delete every stored chunk first, then ingest from scratch.",
     )
-    mode.add_argument(
-        "--clear",
-        action="store_true",
-        help="Delete every stored chunk and stop, without ingesting.",
-    )
     args = parser.parse_args()
-
-    if args.clear:
-        if args.pdf:
-            parser.error("--clear removes every chunk, so it takes no pdf argument.")
-
-        print(f"Cleared: removed {clear_vectorstore()} chunks")
-        return
 
     if args.reset:
         print(f"Reset: removed {clear_vectorstore()} chunks")

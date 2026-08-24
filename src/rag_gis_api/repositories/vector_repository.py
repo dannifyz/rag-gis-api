@@ -97,6 +97,25 @@ def delete_chunks(chunk_ids: list[str]) -> None:
     vectorstore.delete(ids=chunk_ids)
 
 
+def get_sources() -> list[str]:
+    """Return every distinct source stored in the collection."""
+    result = vectorstore.get(include=["metadatas"])
+
+    return sorted({metadata["source"] for metadata in result["metadatas"]})
+
+
+def delete_chunks_by_source(source: str) -> int:
+    """Delete every stored chunk of this source and return how many were removed."""
+    ids = vectorstore.get(where={"source": source}, include=[])["ids"]
+
+    if not ids:
+        return 0
+
+    vectorstore.delete(ids=ids)
+
+    return len(ids)
+
+
 def count_chunks() -> int:
     """Return how many chunks are stored in the collection."""
     return len(vectorstore.get(include=[])["ids"])

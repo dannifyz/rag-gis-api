@@ -18,19 +18,6 @@ class IngestResult:
     deleted: int = 0
 
 
-def clear_vectorstore() -> int:
-    """
-    Delete every chunk in the vector store and return how many were removed.
-
-    The next ingest then re-embeds everything from scratch.
-    """
-    removed = vector_repository.count_chunks()
-
-    vector_repository.delete_all_chunks()
-
-    return removed
-
-
 def ingest_file(path: Path) -> IngestResult:
     """
     Sync one PDF into the vector store.
