@@ -34,7 +34,7 @@ def _connect() -> Generator[sqlite3.Connection]:
     """Open a connection for one operation, commit on success, always close.
 
     A fresh connection per call keeps the OCR worker threads from sharing one
-    connection across threads; WAL lets those writes run concurrently.
+    connection (sqlite3 connections aren't safe to share across threads).
     """
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
