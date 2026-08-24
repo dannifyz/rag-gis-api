@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 from rag_gis_api import DATA_PATH
-from rag_gis_api.services.chunk_service import clear_vectorstore
+from rag_gis_api.services.chunk_service import clear_chunks
 from rag_gis_api.services.ingest.loader.load_file import SUPPORTED_SUFFIXES
 from rag_gis_api.services.ingest_service import IngestResult, ingest_file
 
@@ -56,12 +56,13 @@ def main() -> None:
     parser.add_argument(
         "--reset",
         action="store_true",
-        help="Delete every stored chunk first, then ingest from scratch.",
+        help="Clear stored chunks under path first, then ingest from scratch.",
     )
     args = parser.parse_args()
 
     if args.reset:
-        print(f"Reset: removed {clear_vectorstore()} chunks")
+        removed_chunks, removed_pages = clear_chunks(args.path)
+        print(f"Reset: removed {removed_chunks} chunks and {removed_pages} cached pages")
 
     target = DATA_PATH / args.path if args.path else DATA_PATH
 
