@@ -15,6 +15,10 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 TYPHOON_API_KEY = os.getenv("TYPHOON_API_KEY")
 
+# Optional: ONEP sends this back as `X-API-Key` on POST /api/analysis. If unset,
+# the endpoint accepts requests without checking the header at all.
+ONEP_ANALYSIS_API_KEY = os.getenv("ONEP_ANALYSIS_API_KEY")
+
 if not GOOGLE_API_KEY:
     raise RuntimeError(f"GOOGLE_API_KEY not set. Add it to {PROJECT_ROOT / '.env'}")
 
