@@ -8,6 +8,8 @@ import pypdfium2
 from langchain_core.documents import Document
 
 from rag_gis_api import TYPHOON_API_KEY
+from rag_gis_api.repositories import document_repository
+from rag_gis_api.repositories.document_repository import PageState
 from rag_gis_api.services.ingest.calculate_chunk_metadatas import normalize_source
 from rag_gis_api.services.ingest.shrink_image import (
     MAX_EDGE_PIXELS,
@@ -142,6 +144,7 @@ async def _ocr_worker(
         page = await ocr_queue.get()
         path = page.metadata["source"]
         page_number = page.metadata["page"]
+        page_hash = page.metadata["page_hash"]
 
         source = normalize_source(path)
 
@@ -153,6 +156,18 @@ async def _ocr_worker(
             read = f"{len(page.page_content)} chars" if page.page_content else "no text"
 
             print(f"OCR:  {source} page {page_number} ({read})")
+
+            await asyncio.to_thread(
+                document_repository.save_page_state,
+                PageState(
+                    source=source,
+                    page_number=page_number,
+                    page_hash=page_hash,
+                    extraction_method=document_repository.OCR,
+                    extracted_text=page.page_content,
+                    status=document_repository.SUCCESS,
+                ),
+            )
         except Exception as error:
             failures.append(
                 OcrFailure(
@@ -160,6 +175,18 @@ async def _ocr_worker(
                     page=page_number,
                     error=f"{type(error).__name__}: {error}",
                 )
+            )
+
+            await asyncio.to_thread(
+                document_repository.save_page_state,
+                PageState(
+                    source=source,
+                    page_number=page_number,
+                    page_hash=page_hash,
+                    extraction_method=document_repository.OCR,
+                    extracted_text=None,
+                    status=document_repository.FAILED,
+                ),
             )
         finally:
             ocr_queue.task_done()

@@ -7,7 +7,13 @@ from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
 
+from rag_gis_api import DATA_PATH
+from rag_gis_api.repositories import document_repository
+from rag_gis_api.repositories.document_repository import PageState
+from rag_gis_api.services.ingest.calculate_hash import calculate_content_hash
 from rag_gis_api.services.ingest.ocr import OcrFailure, consume_ocr_queue
+
+PAGE_HASH_KEY = "page_hash"
 
 
 class UnreadablePdfError(Exception):
@@ -128,7 +134,11 @@ def is_readable(text: str) -> bool:
     return found >= MIN_COMMON_WORDS
 
 
-async def read_pages(path: Path, ocr_queue: asyncio.Queue[Document]) -> list[Document]:
+async def read_pages(
+    path: Path,
+    source: str,
+    ocr_queue: asyncio.Queue[Document],
+) -> list[Document]:
     """
     Read a PDF page by page and return every page in order.
 
@@ -148,10 +158,41 @@ async def read_pages(path: Path, ocr_queue: asyncio.Queue[Document]) -> list[Doc
             break
 
         page.page_content = normalize_thai(page.page_content)
+        page_number = page.metadata["page"]
+        page_hash = calculate_content_hash(page.page_content)
 
         documents.append(page)
-        if not is_readable(page.page_content):
-            await ocr_queue.put(page)
+
+        cached = await asyncio.to_thread(document_repository.get_page_state, source, page_number)
+
+        if (
+            cached is not None
+            and cached.page_hash == page_hash
+            and cached.status == document_repository.SUCCESS
+        ):
+            # Same page as a past run that read it: reuse that text.
+            print(f"{source} page {page_number} (Cached)")
+            page.page_content = cached.extracted_text
+            continue
+
+        if is_readable(page.page_content):
+            # PyPDF read it cleanly, so store it and move on.
+            await asyncio.to_thread(
+                document_repository.save_page_state,
+                PageState(
+                    source=source,
+                    page_number=page_number,
+                    page_hash=page_hash,
+                    extraction_method=document_repository.PYPDF,
+                    extracted_text=page.page_content,
+                    status=document_repository.SUCCESS,
+                ),
+            )
+            continue
+
+        # New page, changed page, or one that failed before: hand it to OCR.
+        page.metadata[PAGE_HASH_KEY] = page_hash
+        await ocr_queue.put(page)
 
     return documents
 
@@ -177,12 +218,14 @@ async def wait_for_ocr(ocr_queue: asyncio.Queue[Document], ocr_task: asyncio.Tas
 
 async def read_pages_with_ocr(path: Path) -> list[Document]:
     """Read a PDF, running OCR alongside, and return the pages that hold text."""
+    source = path.relative_to(DATA_PATH).as_posix()
+
     ocr_queue: asyncio.Queue[Document] = asyncio.Queue()
     failures: list[OcrFailure] = []
     ocr_task = asyncio.create_task(consume_ocr_queue(ocr_queue, failures))
 
     try:
-        documents = await read_pages(path, ocr_queue)
+        documents = await read_pages(path, source, ocr_queue)
 
         # OCR runs behind the reader, so give it the pages left in the queue.
         await wait_for_ocr(ocr_queue, ocr_task)
@@ -191,6 +234,9 @@ async def read_pages_with_ocr(path: Path) -> list[Document]:
 
         with suppress(asyncio.CancelledError):
             await ocr_task
+
+    for page in documents:
+        page.metadata.pop(PAGE_HASH_KEY, None)
 
     if failures:
         raise UnreadablePdfError(failures)
