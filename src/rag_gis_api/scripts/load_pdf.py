@@ -13,13 +13,12 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Print page_content of a PDF under documents/.")
     parser.add_argument(
-        "--directory",
-        default=".",
-        help=f"Path relative to {DATA_PATH}",
-    )
-    parser.add_argument(
-        "--pdf",
-        help=f"Path relative to {DATA_PATH} to PDF.",
+        "pdf",
+        nargs="?",
+        help=(
+            f"File or folder relative to {DATA_PATH}; a folder ingests every PDF "
+            "under it (default: every PDF found)."
+        ),
     )
     parser.add_argument(
         "--page",
