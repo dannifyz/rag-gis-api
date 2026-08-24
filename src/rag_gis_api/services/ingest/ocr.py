@@ -1,5 +1,4 @@
 import asyncio
-import io
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +11,11 @@ from rag_gis_api import TYPHOON_API_KEY
 from rag_gis_api.repositories import document_repository
 from rag_gis_api.repositories.document_repository import PageState
 from rag_gis_api.services.ingest.calculate_chunk_metadatas import normalize_source
+from rag_gis_api.services.ingest.shrink_image import (
+    MAX_EDGE_PIXELS,
+    ImageTooLargeError,
+    shrink_to_fit,
+)
 
 MODEL = "typhoon-ocr"
 
@@ -33,7 +37,7 @@ REPETITION_PENALTY = 1.2
 # Typhoon's OCR endpoint and the model that serves it.
 URL = "https://api.opentyphoon.ai/v1/ocr"
 
-# The scans in this corpus sit at 300 DPI, so rendering a little above that
+# The scans in this corpus sit at 400 DPI, so rendering a little above that
 # keeps the tone marks crisp without inventing detail the original never held.
 RENDER_DPI = 400
 
@@ -62,14 +66,21 @@ def render_page(path: Path, page_number: int) -> bytes:
     document = pypdfium2.PdfDocument(path)
 
     try:
-        image = document[page_number].render(scale=RENDER_DPI / 72).to_pil()
+        page = document[page_number]
+        scale = RENDER_DPI / 72
+        longest = max(page.get_width(), page.get_height()) * scale
+
+        if longest > MAX_EDGE_PIXELS:
+            scale *= MAX_EDGE_PIXELS / longest
+
+        image = page.render(scale=scale).to_pil()
     finally:
         document.close()
 
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG", optimize=True)
-
-    return buffer.getvalue()
+    try:
+        return shrink_to_fit(image)
+    except ImageTooLargeError as error:
+        raise OcrError(str(error)) from error
 
 
 def read_content(message: dict) -> str:
