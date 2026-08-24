@@ -136,7 +136,6 @@ def is_readable(text: str) -> bool:
 
 async def read_pages(
     path: Path,
-    source: str,
     ocr_queue: asyncio.Queue[Document],
 ) -> list[Document]:
     """
@@ -147,6 +146,8 @@ async def read_pages(
     """
     loader = PyPDFLoader(str(path))
     pages = loader.lazy_load()
+
+    source = path.relative_to(DATA_PATH).as_posix()
 
     documents = []
 
@@ -160,6 +161,8 @@ async def read_pages(
         page.page_content = normalize_thai(page.page_content)
         page_number = page.metadata["page"]
         page_hash = calculate_content_hash(page.page_content)
+
+        page.metadata["source"] = source
 
         documents.append(page)
 
@@ -218,14 +221,12 @@ async def wait_for_ocr(ocr_queue: asyncio.Queue[Document], ocr_task: asyncio.Tas
 
 async def read_pages_with_ocr(path: Path) -> list[Document]:
     """Read a PDF, running OCR alongside, and return the pages that hold text."""
-    source = path.relative_to(DATA_PATH).as_posix()
-
     ocr_queue: asyncio.Queue[Document] = asyncio.Queue()
     failures: list[OcrFailure] = []
-    ocr_task = asyncio.create_task(consume_ocr_queue(ocr_queue, failures))
+    ocr_task = asyncio.create_task(consume_ocr_queue(path, ocr_queue, failures))
 
     try:
-        documents = await read_pages(path, source, ocr_queue)
+        documents = await read_pages(path, ocr_queue)
 
         # OCR runs behind the reader, so give it the pages left in the queue.
         await wait_for_ocr(ocr_queue, ocr_task)

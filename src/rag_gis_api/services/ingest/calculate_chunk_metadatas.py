@@ -1,15 +1,6 @@
 from langchain_core.documents import Document
 
-from rag_gis_api import DATA_PATH, PROJECT_ROOT
 from rag_gis_api.services.ingest.calculate_hash import calculate_content_hash
-
-
-def normalize_source(source: str | None) -> str | None:
-    """Convert a loader's source path into a path relative to DATA_PATH."""
-    if not source:
-        return None
-
-    return PROJECT_ROOT.joinpath(source).resolve().relative_to(DATA_PATH).as_posix()
 
 
 def calculate_chunk_metadatas(chunks: list[Document]) -> list[Document]:
@@ -26,14 +17,12 @@ def calculate_chunk_metadatas(chunks: list[Document]) -> list[Document]:
     chunk_index = 0
 
     for chunk in chunks:
-        source = normalize_source(chunk.metadata.get("source"))
+        source = chunk.metadata.get("source")
         page = chunk.metadata.get("page")
         page_id = f"{source}:{page}"
 
         chunk_index = chunk_index + 1 if page_id == last_page_id else 0
 
-        chunk.metadata["source"] = source
-        chunk.metadata["page"] = page
         chunk.metadata["chunk_index"] = chunk_index
         chunk.metadata["id"] = f"{page_id}:{chunk_index}"
         chunk.metadata["content_hash"] = calculate_content_hash(chunk.page_content)
