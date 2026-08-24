@@ -15,6 +15,7 @@ FAILED = "FAILED"
 # extraction_method values
 PYPDF = "PYPDF"
 OCR = "OCR"
+DOCX = "DOCX"
 
 
 @dataclass
@@ -24,7 +25,7 @@ class PageState:
     source: str
     page_number: int
     page_hash: str
-    extraction_method: str  # PYPDF | OCR
+    extraction_method: str  # PYPDF | OCR | DOCX
     extracted_text: str | None  # NULL when the page failed
     status: str  # SUCCESS | FAILED
 
