@@ -15,6 +15,11 @@ wheels/
 # Vector store
 chroma_db/
 
+# Page-level extraction cache
+document_cache.db
+document_cache.db-shm
+document_cache.db-wal
+
 # Retrivable documents
 documents/*
 !documents/.gitkeep
