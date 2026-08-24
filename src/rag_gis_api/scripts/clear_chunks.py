@@ -22,7 +22,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    target = args.path or "everything"
+    print(f"About to clear: {target}")
+    confirmation = input('Type "CLEAR" to confirm: ')
+    if confirmation != "CLEAR":
+        print("Aborted; nothing was cleared.")
+        return
+
     removed_chunks, removed_pages = clear_chunks(args.path)
 
-    target = args.path or "everything"
     print(f"Cleared {target}: removed {removed_chunks} chunks and {removed_pages} cached pages")
