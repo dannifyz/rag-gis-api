@@ -4,9 +4,6 @@ import sys
 from rag_gis_api import DATA_PATH
 from rag_gis_api.services.ingest.load_pdf import load_pdf
 
-# Min_Notif_028.pdf is readable by PyPDF.
-DEFAULT_PDF = "law/min_notif/Min_Notif_028.pdf"
-
 
 def main() -> None:
     # The Windows console defaults to cp1252, which cannot print Thai.
@@ -16,8 +13,10 @@ def main() -> None:
     parser.add_argument(
         "pdf",
         nargs="?",
-        default=DEFAULT_PDF,
-        help=f"Path relative to {DATA_PATH} (default: {DEFAULT_PDF}).",
+        help=(
+            f"File or folder relative to {DATA_PATH}; a folder ingests every PDF "
+            "under it (default: every PDF found)."
+        ),
     )
     parser.add_argument(
         "--page",
@@ -26,13 +25,33 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    path = DATA_PATH / args.pdf
-    documents = load_pdf(path)
+    target = DATA_PATH / args.pdf if args.pdf else DATA_PATH
 
-    if args.page is not None:
-        documents = [d for d in documents if d.metadata.get("page") == args.page]
+    paths = sorted(target.rglob("*.pdf")) if target.is_dir() else [target]
 
-    print(f"{path} -> {len(documents)} pages")
-    for document in documents:
-        print(f"\n===== page {document.metadata.get('page')} =====")
-        print(document.page_content)
+    results, failed = [], []
+
+    for path in paths:
+        try:
+            documents = load_pdf(path)
+        except Exception as e:
+            failed.append((path, e))
+            continue
+
+        if args.page is not None:
+            documents = [d for d in documents if d.metadata.get("page") == args.page]
+
+        results.append((path, documents))
+
+    for path, result in results:
+        print(f"{path} -> {len(result)} pages")
+
+        for page in result:
+            print(f"\n===== page {page.metadata.get('page')} =====")
+            print(page.page_content)
+
+    if failed:
+        print("\n===== failed path =====")
+
+        for i in range(len(failed)):
+            print(f"{i}: {failed[i][0]}")
