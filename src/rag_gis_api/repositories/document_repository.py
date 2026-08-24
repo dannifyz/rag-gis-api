@@ -1,5 +1,5 @@
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
@@ -30,7 +30,7 @@ class PageState:
 
 
 @contextmanager
-def _connect() -> Iterator[sqlite3.Connection]:
+def _connect() -> Generator[sqlite3.Connection]:
     """Open a connection for one operation, commit on success, always close.
 
     A fresh connection per call keeps the OCR worker threads from sharing one
