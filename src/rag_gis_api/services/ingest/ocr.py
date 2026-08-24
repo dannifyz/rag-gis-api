@@ -8,6 +8,7 @@ import pypdfium2
 from langchain_core.documents import Document
 
 from rag_gis_api import TYPHOON_API_KEY
+from rag_gis_api.services.ingest.calculate_chunk_metadatas import normalize_source
 from rag_gis_api.services.ingest.shrink_image import (
     MAX_EDGE_PIXELS,
     ImageTooLargeError,
@@ -40,6 +41,9 @@ RENDER_DPI = 400
 
 # A dense scan takes the vision model a while, so the timeout is generous.
 TIMEOUT = 120
+
+# OCR is network-bound, so several pages can be in flight at once.
+OCR_CONCURRENCY = 4
 
 
 class OcrError(Exception):
@@ -89,7 +93,7 @@ def read_content(message: dict) -> str:
     return parsed.get("natural_text", content) if isinstance(parsed, dict) else content
 
 
-async def extract_text_from_image(image: bytes) -> str:
+async def extract_text_from_image(client: httpx.AsyncClient, image: bytes) -> str:
     """Send one rendered page to Typhoon OCR and return the text it read."""
     files = {"file": ("page.png", image, "image/png")}
 
@@ -104,8 +108,7 @@ async def extract_text_from_image(image: bytes) -> str:
 
     headers = {"Authorization": f"Bearer {TYPHOON_API_KEY}"}
 
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-        response = await client.post(URL, files=files, data=data, headers=headers)
+    response = await client.post(URL, files=files, data=data, headers=headers)
 
     if response.status_code != 200:
         raise OcrError(f"HTTP {response.status_code}: {response.text[:200]}")
@@ -129,20 +132,23 @@ async def extract_text_from_image(image: bytes) -> str:
     return "\n".join(contents).strip()
 
 
-async def consume_ocr_queue(
+async def _ocr_worker(
+    client: httpx.AsyncClient,
     ocr_queue: asyncio.Queue[Document],
     failures: list[OcrFailure],
 ) -> None:
     """Fill in the pages PyPDF could not read, one at a time."""
     while True:
         page = await ocr_queue.get()
-        source = page.metadata["source"]
+        path = page.metadata["source"]
         page_number = page.metadata["page"]
+
+        source = normalize_source(path)
 
         try:
             # Rendering is CPU-bound, so it goes off the event loop as well.
-            image = await asyncio.to_thread(render_page, source, page_number)
-            page.page_content = await extract_text_from_image(image)
+            image = await asyncio.to_thread(render_page, path, page_number)
+            page.page_content = await extract_text_from_image(client, image)
 
             read = f"{len(page.page_content)} chars" if page.page_content else "no text"
 
@@ -157,3 +163,23 @@ async def consume_ocr_queue(
             )
         finally:
             ocr_queue.task_done()
+
+
+async def consume_ocr_queue(
+    ocr_queue: asyncio.Queue[Document],
+    failures: list[OcrFailure],
+) -> None:
+    """Run OCR workers in parallel until cancelled, sharing one client."""
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        workers = [
+            asyncio.create_task(_ocr_worker(client, ocr_queue, failures))
+            for _ in range(OCR_CONCURRENCY)
+        ]
+
+        try:
+            await asyncio.gather(*workers)
+        finally:
+            for worker in workers:
+                worker.cancel()
+
+            await asyncio.gather(*workers, return_exceptions=True)
