@@ -171,7 +171,7 @@ async def read_pages(
             and cached.status == document_repository.SUCCESS
         ):
             # Same page as a past run that read it: reuse that text.
-            print(f"OCR:  {source} page {page_number} (Cached)")
+            print(f"{source} page {page_number} (Cached)")
             page.page_content = cached.extracted_text
             continue
 
