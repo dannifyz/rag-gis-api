@@ -2,10 +2,7 @@ import argparse
 import sys
 
 from rag_gis_api import DATA_PATH
-from rag_gis_api.services.ingest.loader.load_file import load_file
-
-# Extensions load_file knows how to read.
-SUPPORTED_SUFFIXES = (".pdf", ".docx")
+from rag_gis_api.services.ingest.loader.load_file import SUPPORTED_SUFFIXES, load_file
 
 
 def main() -> None:

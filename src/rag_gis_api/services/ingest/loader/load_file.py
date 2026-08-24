@@ -5,6 +5,9 @@ from langchain_core.documents import Document
 from rag_gis_api.services.ingest.loader.load_docx import load_docx
 from rag_gis_api.services.ingest.loader.load_pdf import load_pdf
 
+# Extensions load_file knows how to read.
+SUPPORTED_SUFFIXES = (".pdf", ".docx")
+
 
 class UnsupportedFileError(Exception):
     """The file has an extension no loader handles."""

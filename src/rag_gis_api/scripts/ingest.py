@@ -4,12 +4,13 @@ from pathlib import Path
 
 from rag_gis_api import DATA_PATH
 from rag_gis_api.services.chunk_service import clear_vectorstore
+from rag_gis_api.services.ingest.loader.load_file import SUPPORTED_SUFFIXES
 from rag_gis_api.services.ingest_service import IngestResult, ingest_file
 
 
 def ingest_all_files(paths: list[Path]) -> tuple[list[IngestResult], list[str]]:
     """Ingest every path and return what succeeded, and the sources that failed."""
-    print(f"Found {len(paths)} PDF files")
+    print(f"Found {len(paths)} files")
 
     results, failed = [], []
 
@@ -42,14 +43,14 @@ def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     parser = argparse.ArgumentParser(
-        description="Ingest PDFs under documents/ into the vector store."
+        description="Ingest documents under documents/ into the vector store."
     )
     parser.add_argument(
-        "pdf",
+        "path",
         nargs="?",
         help=(
-            f"File or folder relative to {DATA_PATH}; a folder ingests every PDF "
-            "under it (default: every PDF found)."
+            f"File or folder relative to {DATA_PATH}; a folder ingests every "
+            "supported file under it (default: every supported file found)."
         ),
     )
     parser.add_argument(
@@ -62,10 +63,13 @@ def main() -> None:
     if args.reset:
         print(f"Reset: removed {clear_vectorstore()} chunks")
 
-    target = DATA_PATH / args.pdf if args.pdf else DATA_PATH
+    target = DATA_PATH / args.path if args.path else DATA_PATH
 
-    # A folder ingests every PDF under it, a file ingests just that file.
-    paths = sorted(target.rglob("*.pdf")) if target.is_dir() else [target]
+    # A folder ingests every supported file under it, a file ingests just itself.
+    if target.is_dir():
+        paths = sorted(p for p in target.rglob("*") if p.suffix.lower() in SUPPORTED_SUFFIXES)
+    else:
+        paths = [target]
 
     results, failed = ingest_all_files(paths)
 
