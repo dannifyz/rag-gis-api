@@ -28,7 +28,7 @@ TOP_P = 0.6
 
 # OCR wants the same page to read the same way every time, so sampling stays
 # close to deterministic.
-TEMPERATURE = 0.1
+TEMPERATURE = 0.0
 
 # A vision model that loses its place tends to repeat a line forever
 REPETITION_PENALTY = 1.2
