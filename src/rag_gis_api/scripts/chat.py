@@ -11,7 +11,7 @@ DEFAULT_QUESTION = "การขออนุญาตก่อสร้างม
 DEFAULT_URL = "http://127.0.0.1:8000/api/chat/stream"
 
 # Retrieval plus a full answer can take a while; the default 5s would cut it off.
-TIMEOUT = 120
+TIMEOUT = 1200
 
 
 async def stream_answer(url: str, question: str) -> int:
