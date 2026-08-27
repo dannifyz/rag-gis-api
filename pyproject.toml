@@ -27,9 +27,10 @@ dependencies = [
 [project.scripts]
 rag-gis-api = "rag_gis_api.app:main"
 rag-gis-chat = "rag_gis_api.scripts.chat:main"
+rag-gis-clear-chunks = "rag_gis_api.scripts.clear_chunks:main"
 rag-gis-ingest = "rag_gis_api.scripts.ingest:main"
-rag-gis-load-doc = "rag_gis_api.scripts.load_doc:main"
-rag-gis-load-pdf = "rag_gis_api.scripts.load_pdf:main"
+rag-gis-load-chunks = "rag_gis_api.scripts.load_chunks:main"
+rag-gis-load-file = "rag_gis_api.scripts.load_file:main"
 rag-gis-prompt = "rag_gis_api.scripts.prompt:main"
 
 [build-system]

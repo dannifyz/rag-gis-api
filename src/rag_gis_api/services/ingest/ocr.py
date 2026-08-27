@@ -10,7 +10,6 @@ from langchain_core.documents import Document
 from rag_gis_api import TYPHOON_API_KEY
 from rag_gis_api.repositories import document_repository
 from rag_gis_api.repositories.document_repository import PageState
-from rag_gis_api.services.ingest.calculate_chunk_metadatas import normalize_source
 from rag_gis_api.services.ingest.shrink_image import (
     MAX_EDGE_PIXELS,
     ImageTooLargeError,
@@ -29,7 +28,7 @@ TOP_P = 0.6
 
 # OCR wants the same page to read the same way every time, so sampling stays
 # close to deterministic.
-TEMPERATURE = 0.1
+TEMPERATURE = 0.0
 
 # A vision model that loses its place tends to repeat a line forever
 REPETITION_PENALTY = 1.2
@@ -136,17 +135,16 @@ async def extract_text_from_image(client: httpx.AsyncClient, image: bytes) -> st
 
 async def _ocr_worker(
     client: httpx.AsyncClient,
+    path: Path,
     ocr_queue: asyncio.Queue[Document],
     failures: list[OcrFailure],
 ) -> None:
     """Fill in the pages PyPDF could not read, one at a time."""
     while True:
         page = await ocr_queue.get()
-        path = page.metadata["source"]
+        source = page.metadata["source"]
         page_number = page.metadata["page"]
         page_hash = page.metadata["page_hash"]
-
-        source = normalize_source(path)
 
         try:
             # Rendering is CPU-bound, so it goes off the event loop as well.
@@ -193,13 +191,14 @@ async def _ocr_worker(
 
 
 async def consume_ocr_queue(
+    path: Path,
     ocr_queue: asyncio.Queue[Document],
     failures: list[OcrFailure],
 ) -> None:
     """Run OCR workers in parallel until cancelled, sharing one client."""
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         workers = [
-            asyncio.create_task(_ocr_worker(client, ocr_queue, failures))
+            asyncio.create_task(_ocr_worker(client, path, ocr_queue, failures))
             for _ in range(OCR_CONCURRENCY)
         ]
 

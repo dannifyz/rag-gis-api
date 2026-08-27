@@ -15,6 +15,7 @@ FAILED = "FAILED"
 # extraction_method values
 PYPDF = "PYPDF"
 OCR = "OCR"
+DOCX = "DOCX"
 
 
 @dataclass
@@ -24,7 +25,7 @@ class PageState:
     source: str
     page_number: int
     page_hash: str
-    extraction_method: str  # PYPDF | OCR
+    extraction_method: str  # PYPDF | OCR | DOCX
     extracted_text: str | None  # NULL when the page failed
     status: str  # SUCCESS | FAILED
 
@@ -86,6 +87,44 @@ def get_page_state(source: str, page_number: int) -> PageState | None:
         extracted_text=row["extracted_text"],
         status=row["status"],
     )
+
+
+def count_pages() -> int:
+    """Return how many pages are cached across all documents."""
+    with _connect() as connection:
+        return connection.execute("SELECT COUNT(*) FROM document_page").fetchone()[0]
+
+
+def clear_cache() -> int:
+    """Delete every cached page and return how many were removed.
+
+    The next ingest then re-extracts every page instead of reusing stale text.
+    """
+    removed = count_pages()
+
+    with _connect() as connection:
+        connection.execute("DELETE FROM document_page")
+
+    return removed
+
+
+def get_cached_sources() -> list[str]:
+    """Return every distinct source that has cached pages."""
+    with _connect() as connection:
+        rows = connection.execute("SELECT DISTINCT source FROM document_page").fetchall()
+
+    return sorted(row["source"] for row in rows)
+
+
+def clear_cache_for(source: str) -> int:
+    """Delete the cached pages of one source and return how many were removed."""
+    with _connect() as connection:
+        removed = connection.execute(
+            "SELECT COUNT(*) FROM document_page WHERE source = ?", (source,)
+        ).fetchone()[0]
+        connection.execute("DELETE FROM document_page WHERE source = ?", (source,))
+
+    return removed
 
 
 def save_page_state(state: PageState) -> None:

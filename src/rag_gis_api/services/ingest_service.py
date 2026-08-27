@@ -6,7 +6,7 @@ from rag_gis_api.repositories import vector_repository
 from rag_gis_api.services.ingest.calculate_hash import calculate_file_hash
 from rag_gis_api.services.ingest.chunk_documents import chunk_documents
 from rag_gis_api.services.ingest.compare_chunks import compare_chunks
-from rag_gis_api.services.ingest.load_pdf import load_pdf
+from rag_gis_api.services.ingest.loader.load_file import load_file
 
 
 @dataclass
@@ -16,19 +16,6 @@ class IngestResult:
     inserted: int = 0
     updated: int = 0
     deleted: int = 0
-
-
-def clear_vectorstore() -> int:
-    """
-    Delete every chunk in the vector store and return how many were removed.
-
-    The next ingest then re-embeds everything from scratch.
-    """
-    removed = vector_repository.count_chunks()
-
-    vector_repository.delete_all_chunks()
-
-    return removed
 
 
 def ingest_file(path: Path) -> IngestResult:
@@ -49,7 +36,7 @@ def ingest_file(path: Path) -> IngestResult:
 
     status = "new" if stored_file_hash is None else "changed"
 
-    chunks = chunk_documents(load_pdf(path))
+    chunks = chunk_documents(load_file(path))
 
     for chunk in chunks:
         chunk.metadata["file_hash"] = file_hash
