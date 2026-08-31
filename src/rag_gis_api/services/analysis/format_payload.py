@@ -291,10 +291,15 @@ def category_site_type_counts(sites: list[SiteImpact], category: str | None) -> 
 
 def format_category_line(index: int, name: str, site_count: int) -> str:
     """One numbered line of the count section, in the wording CRAFT's example shows."""
-    if site_count == 0:
-        return f"{index}. ไม่พบ{name}"
+    # "ไม่พบTentative List" runs together in Thai, which has no inter-word space; a
+    # Latin name needs the space back or the two words read as one token.
+    lead = f"{format_count(index)}. "
+    spacer = " " if name[:1].isascii() else ""
 
-    return f"{index}. พบ{name} จำนวน {format_count(site_count)} แห่ง"
+    if site_count == 0:
+        return f"{lead}ไม่พบ{spacer}{name}"
+
+    return f"{lead}พบ{spacer}{name} จำนวน {format_count(site_count)} แห่ง"
 
 
 def format_category_breakdown(request: AnalysisRequest) -> str:
@@ -339,7 +344,18 @@ def format_category_context(request: AnalysisRequest) -> str:
         line = f"- {display}: {category.site_count} แห่ง"
         lines.append(f"{line} (แยกตามประเภท: {breakdown})" if breakdown else line)
 
-    return "\n".join(lines) if lines else "(ไม่พบแหล่งในหมวดใด)"
+    if not lines:
+        return "(ไม่พบแหล่งในหมวดใด)"
+
+    if request.sites_truncated:
+        # Without this the model reads "88 แห่ง (แยกตามประเภท: วัด 1 แห่ง)" as a
+        # contradiction and tends to talk itself into explaining the gap.
+        lines.append(
+            "(หมายเหตุ: ตัวเลขแยกตามประเภทนับจากรายการแหล่งที่ส่งมาซึ่งถูกตัดให้สั้นลง "
+            "จึงน้อยกว่าจำนวนจริงในหมวดนั้น ให้ยึดจำนวนรวมของหมวดเป็นหลัก)"
+        )
+
+    return "\n".join(lines)
 
 
 def format_guidance_context(request: AnalysisRequest) -> str:
