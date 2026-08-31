@@ -11,10 +11,13 @@ NO_LOCATION = "ไม่ทราบตำแหน่ง"
 UNKNOWN_CATEGORY = "ไม่ทราบหมวด"
 
 # Up to this many sites of one type, an opinion point can name each of them; past it the
-# list of names would run longer than the point it sits in. Decided per site_type rather
-# than per category because a project can touch 86 waterways and one cave, and the cave
-# is still worth naming. Prose only - the numbered count section states every total.
-NAME_LIMIT = 4
+# whole group loses its names and is referred to collectively - "ตั้งอยู่ใกล้ย่านชุมชนเก่า
+# และกลุ่มอาคารสถาปัตยกรรมบ้านเรือน" rather than seven names in a row. All-or-nothing per
+# group: naming some sites of a type and not others reads as สผ. weighting them unequally.
+# Decided per site_type rather than per category because a project can touch 86 waterways
+# and one cave, and the cave is still worth naming. Prose only - the numbered count
+# section states every total regardless.
+NAME_LIMIT = 2
 
 NAME_ALLOWED = "ระบุชื่อแหล่งได้"
 NAME_DENIED = "ไม่ต้องไล่ชื่อแหล่ง ให้กล่าวรวมเป็นประเภท"
@@ -253,18 +256,22 @@ def format_site_group(label: str, sites: list[SiteImpact]) -> str:
     model listed eight of them - the pull of a name sitting in the context beats an
     instruction elsewhere in it. What it is not given, it cannot copy out.
     """
-    provinces = ", ".join(dict.fromkeys(site.province for site in sites if site.province))
-    inside = sum(1 for site in sites if round(site.closest_distance_m, 1) == 0)
+    provinces = " ".join(dict.fromkeys(site.province for site in sites if site.province))
+    inside = any(round(site.closest_distance_m, 1) == 0 for site in sites)
     nearest = min(site.closest_distance_m for site in sites)
 
-    parts = [f"- {label} จำนวน {len(sites)} แห่ง ในพื้นที่ {provinces or NO_LOCATION}"]
+    parts = [f"- {label} (พบหลายแห่ง) ในพื้นที่ {provinces or NO_LOCATION}"]
 
+    # No count, deliberately. An earlier version said "ตัดผ่าน 16 แห่ง" here and the
+    # model printed that figure in its point, against a count section that had already
+    # said 52 - two different totals for one dataset in one letter. Distances are safe
+    # to hand over (สผ.'s letters quote them); counts belong to the count section alone.
     if inside:
-        parts.append(f"อยู่ในพื้นที่โครงการหรือตัดผ่าน {inside} แห่ง")
+        parts.append("มีบางแห่งที่แนวเส้นทางโครงการตัดผ่านหรืออยู่ในพื้นที่โครงการ")
     else:
         parts.append(f"ใกล้ที่สุดห่าง {format_number(nearest)} ม.")
 
-    parts.append("(กลุ่มนี้มีจำนวนมาก จึงไม่ส่งรายชื่อรายแหล่งมาให้)")
+    parts.append("(ไม่ส่งรายชื่อและจำนวนรายแหล่งของกลุ่มนี้มาให้)")
 
     return ", ".join(parts)
 
