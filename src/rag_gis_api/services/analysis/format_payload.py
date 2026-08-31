@@ -43,7 +43,11 @@ CATEGORY_ALIASES: dict[str, tuple[str, ...]] = {
     "แหล่งมรดกโลก": ("แหล่งมรดกโลก", "มรดกโลก"),
     "Tentative List": ("บัญชีรายชื่อเบื้องต้น", "tentative list", "tentative"),
     "พื้นที่คุ้มครอง": ("พื้นที่คุ้มครอง", "พื้นที่อนุรักษ์", "คุ้มครอง"),
-    "ผังภูมินิเวศ": ("ผังภูมินิเวศ", "ภูมินิเวศ"),
+    # "ผังพื้นที่อนุรักษ์-ภูมินิเวศ" is what ONEP actually sends, and it contains
+    # "พื้นที่อนุรักษ์" - a longer alias than "ภูมินิเวศ" - so without the full string
+    # here it lands in พื้นที่คุ้มครอง and the report says "ไม่พบผังภูมินิเวศ" for a
+    # category ONEP reported sites in.
+    "ผังภูมินิเวศ": ("ผังพื้นที่อนุรักษ์-ภูมินิเวศ", "ผังพื้นที่อนุรักษ์", "ผังภูมินิเวศ", "ภูมินิเวศ"),
 }
 
 
@@ -213,11 +217,89 @@ def format_site(site: SiteImpact) -> str:
     return ", ".join(parts)
 
 
+def site_group_key(site: SiteImpact) -> tuple[str | None, str]:
+    """The (category, type) pair a site is counted and named under."""
+    return site.category, site.site_type or site.sub_category or "ไม่ทราบประเภท"
+
+
+def naming_verdicts(request: AnalysisRequest) -> dict[tuple[str | None, str], bool]:
+    """Which (category, type) groups are small enough for the prose to name."""
+    counts: dict[tuple[str | None, str], int] = {}
+
+    for site in request.sites:
+        key = site_group_key(site)
+        counts[key] = counts.get(key, 0) + 1
+
+    totals = {
+        category.category: category.site_count
+        for category in merge_categories(request.summary.by_category)
+    }
+
+    # A cut sites[] makes every group count a floor rather than the truth, so a group
+    # that looks small inside an oversized category has not been shown to be small.
+    return {
+        (category, label): count <= NAME_LIMIT
+        and not (request.sites_truncated and totals.get(category, count) > NAME_LIMIT)
+        for (category, label), count in counts.items()
+    }
+
+
+def format_site_group(label: str, sites: list[SiteImpact]) -> str:
+    """
+    One aggregate line standing in for a group with too many sites to name.
+
+    The names are withheld from the model rather than forbidden by a prompt rule.
+    Told in the prompt not to list 52 waterways but handed all 52 names anyway, the
+    model listed eight of them - the pull of a name sitting in the context beats an
+    instruction elsewhere in it. What it is not given, it cannot copy out.
+    """
+    provinces = ", ".join(dict.fromkeys(site.province for site in sites if site.province))
+    inside = sum(1 for site in sites if round(site.closest_distance_m, 1) == 0)
+    nearest = min(site.closest_distance_m for site in sites)
+
+    parts = [f"- {label} จำนวน {len(sites)} แห่ง ในพื้นที่ {provinces or NO_LOCATION}"]
+
+    if inside:
+        parts.append(f"อยู่ในพื้นที่โครงการหรือตัดผ่าน {inside} แห่ง")
+    else:
+        parts.append(f"ใกล้ที่สุดห่าง {format_number(nearest)} ม.")
+
+    parts.append("(กลุ่มนี้มีจำนวนมาก จึงไม่ส่งรายชื่อรายแหล่งมาให้)")
+
+    return ", ".join(parts)
+
+
 def format_sites(request: AnalysisRequest) -> str:
+    """
+    The site detail block, with over-sized groups collapsed to one aggregate line.
+
+    Groups keep the position of their first member so the whole block stays in
+    ONEP's nearest-first order.
+    """
     if request.summary.total_sites == 0:
         return "(ไม่พบแหล่งที่ได้รับผลกระทบ)"
 
-    lines = [format_site(site) for site in request.sites]
+    verdicts = naming_verdicts(request)
+    lines: list[str] = []
+    groups: dict[tuple[str | None, str], list[SiteImpact]] = {}
+    slots: dict[tuple[str | None, str], int] = {}
+
+    for site in request.sites:
+        key = site_group_key(site)
+
+        if verdicts[key]:
+            lines.append(format_site(site))
+            continue
+
+        if key not in groups:
+            groups[key] = []
+            slots[key] = len(lines)
+            lines.append("")
+
+        groups[key].append(site)
+
+    for key, members in groups.items():
+        lines[slots[key]] = format_site_group(key[1], members)
 
     if request.sites_truncated:
         lines.append(
@@ -333,23 +415,19 @@ def format_category_breakdown(request: AnalysisRequest) -> str:
     return "\n".join(lines)
 
 
-def naming_note(count: int, *, trusted: bool) -> str:
-    """Whether the opinion points may name the sites of a group this size."""
-    return NAME_ALLOWED if trusted and count <= NAME_LIMIT else NAME_DENIED
-
-
 def format_category_context(request: AnalysisRequest) -> str:
     """
     The per-category counts as context for the LLM, with the site-type breakdown.
 
-    Each type carries its own naming verdict in brackets. Computed here rather than
-    left to the prompt because deciding it means counting rows, and a model that
-    miscounts would either bury the point under a name list or drop names it should
-    have given - both invisible in an output that otherwise reads correctly.
+    Each type carries its own naming verdict in brackets - the same verdict that
+    decided whether format_sites handed over that type's names at all. Stated here
+    so the model can see why a group arrived without names, rather than reading the
+    gap as missing data and hedging about it in the prose.
 
     Arabic digits and a flat shape on purpose: this is input the model reasons over,
     not text it should echo. The report body is assembled separately.
     """
+    verdicts = naming_verdicts(request)
     lines = []
 
     for category in merge_categories(request.summary.by_category):
@@ -358,20 +436,14 @@ def format_category_context(request: AnalysisRequest) -> str:
 
         display = resolve_category(category.category) or category.category or UNKNOWN_CATEGORY
         counts = category_site_type_counts(request.sites, category.category)
-        # A cut sites[] makes every type count a floor rather than the truth, so a type
-        # that looks small inside an oversized category has not been shown to be small.
-        trusted = not (request.sites_truncated and category.site_count > NAME_LIMIT)
         breakdown = ", ".join(
-            f"{label} {count} แห่ง [{naming_note(count, trusted=trusted)}]"
+            f"{label} {count} แห่ง "
+            f"[{NAME_ALLOWED if verdicts.get((category.category, label)) else NAME_DENIED}]"
             for label, count in counts.items()
         )
 
         line = f"- {display}: {category.site_count} แห่ง"
-        lines.append(
-            f"{line} (แยกตามประเภท: {breakdown})"
-            if breakdown
-            else f"{line} [{naming_note(category.site_count, trusted=trusted)}]"
-        )
+        lines.append(f"{line} (แยกตามประเภท: {breakdown})" if breakdown else line)
 
     if not lines:
         return "(ไม่พบแหล่งในหมวดใด)"
