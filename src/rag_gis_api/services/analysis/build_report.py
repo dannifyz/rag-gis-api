@@ -5,7 +5,11 @@ from rag_gis_api.services.analysis.format_payload import (
     format_category_breakdown,
     format_project_area,
 )
-from rag_gis_api.services.analysis.thai_text import format_count, format_measure
+from rag_gis_api.services.analysis.thai_text import (
+    format_count,
+    format_measure,
+    thai_digits_in_prose,
+)
 
 OFFICE = "สำนักงานนโยบายและแผนทรัพยากรธรรมชาติและสิ่งแวดล้อม"
 DEFAULT_AGENCY = "หน่วยงานเจ้าของโครงการ"
@@ -108,13 +112,18 @@ def format_opinions(text: str) -> str:
     The model is asked for one point per line precisely so the numbering can be applied
     here: a reviewer who reads "ข้อ ๓" in a covering note has to find the same point at
     ๓ in the report, and a model that miscounts mid-list would break that quietly.
+
+    Figures inside the points are converted here too, rather than being asked for in
+    Thai digits, so a model that reverts to Arabic mid-sentence cannot leave the one
+    paragraph it writes looking unlike the rest of the letter.
     """
     points = [
         stripped for line in text.splitlines() if (stripped := LIST_MARKER.sub("", line).strip())
     ]
 
     return "\n".join(
-        f"{format_count(number)}. {point}" for number, point in enumerate(points, start=1)
+        f"{format_count(number)}. {thai_digits_in_prose(point)}"
+        for number, point in enumerate(points, start=1)
     )
 
 
