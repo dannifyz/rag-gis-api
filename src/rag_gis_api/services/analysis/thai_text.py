@@ -2,10 +2,8 @@
 
 import re
 
-# Every สผ. letter in the reference set numbers everything in Thai digits -
-# "จำนวน ๙๒ แห่ง", "พ.ศ. ๒๕๖๔", "ประมาณ ๗๒๐ เมตร" - so every figure printed into the
-# report body goes through here. Arabic digits in a หนังสือราชการ read as an unproofed
-# draft. Figures handed to the LLM as context stay Arabic (see format_payload).
+# สผ. letters number everything in Thai digits, so every figure printed into the report
+# body goes through here. Figures handed to the LLM as context stay Arabic (see format_payload).
 THAI_DIGITS = str.maketrans("0123456789", "๐๑๒๓๔๕๖๗๘๙")
 
 
@@ -22,8 +20,7 @@ def format_measure(value: float) -> str:
     """
     A measurement for prose: thousands separators, at most 2 decimals, Thai digits.
 
-    Plain `:g` flips to scientific notation around 1e6 - routine for a GIS area in
-    square metres - which would reach the reader as broken text mid-sentence.
+    Avoids `:g`, which flips to scientific notation around 1e6 (routine for a GIS area).
     """
     rounded = round(value, 2)
 
@@ -33,11 +30,9 @@ def format_measure(value: float) -> str:
     return to_thai_digits(f"{rounded:,.2f}".rstrip("0").rstrip("."))
 
 
-# A digit run that is not glued to Latin letters. The reference letters put every figure
-# in Thai digits — "หมายเลข ๓๓๑", "พ.ศ. ๒๕๖๔", "ประมาณ ๗๒๐ เมตร" — but leave the digits
-# inside Latin identifiers alone, one line even reading "หมายเลข ๕ (MR1)". A decimal
-# glued to a Latin prefix (PM2.5) still converts its fractional half; no reference letter
-# writes one, and the alternative is a tokeniser for a case that does not arise.
+# A digit run not glued to Latin letters: figures convert to Thai digits, but digits
+# inside Latin identifiers (MR1) stay. PM2.5 still converts its fractional half — no
+# reference letter writes one, and handling it would need a tokeniser.
 PROSE_DIGITS = re.compile(r"(?<![A-Za-z])\d+(?![A-Za-z])")
 
 
@@ -50,8 +45,7 @@ def normalize_sara_am(text: str) -> str:
     """
     Put ำ back together where it arrived as นิคหิต + สระอา.
 
-    The model emits the decomposed pair often enough to matter ("ระบายน้ํา" for
-    "ระบายน้ำ"): the two render as near-identical glyphs, so it survives review and
-    lands in a หนังสือราชการ as a word no Thai search will match.
+    The model emits the decomposed pair often ("ระบายน้ํา"); it renders near-identically,
+    survives review, and lands as a word no Thai search matches.
     """
     return text.replace("ํา", "ำ")

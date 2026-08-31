@@ -10,22 +10,16 @@ from rag_gis_api.services.analysis.thai_text import format_count
 NO_LOCATION = "ไม่ทราบตำแหน่ง"
 UNKNOWN_CATEGORY = "ไม่ทราบหมวด"
 
-# Up to this many sites of one type, an opinion point can name each of them; past it the
-# whole group loses its names and is referred to collectively - "ตั้งอยู่ใกล้ย่านชุมชนเก่า
-# และกลุ่มอาคารสถาปัตยกรรมบ้านเรือน" rather than seven names in a row. All-or-nothing per
-# group: naming some sites of a type and not others reads as สผ. weighting them unequally.
-# Decided per site_type rather than per category because a project can touch 86 waterways
-# and one cave, and the cave is still worth naming. Prose only - the numbered count
-# section states every total regardless.
+# Up to this many sites of one type, a point may name each; past it the group is named
+# collectively. All-or-nothing per group, else it reads as สผ. weighting sites unequally.
+# Per site_type, not category: a project can touch 86 waterways and one still-nameable cave.
 NAME_LIMIT = 2
 
 NAME_ALLOWED = "ระบุชื่อแหล่งได้"
 NAME_DENIED = "ไม่ต้องไล่ชื่อแหล่ง ให้กล่าวรวมเป็นประเภท"
 
-# The six datasets the CRAFT spec names, in the order the report lists them. Every one
-# is printed on every report - "ไม่พบ<หมวด>" for a zero hit - because a สผ. reviewer
-# reads a stated absence as a checked-and-clear result, while a missing line reads as
-# a dataset nobody looked at.
+# The six CRAFT datasets, in report order. Every one is printed even at zero ("ไม่พบ<หมวด>"):
+# a stated absence reads as checked-and-clear, a missing line as a dataset nobody checked.
 CATEGORY_ORDER = (
     "แหล่งศิลปกรรม",
     "แหล่งธรรมชาติ",
@@ -35,21 +29,16 @@ CATEGORY_ORDER = (
     "ผังภูมินิเวศ",
 )
 
-# ONEP's `category` strings are still unconfirmed against these display names, and สผ.'s
-# own letters spell the same dataset several ways ("แหล่งศิลปกรรมอันควรอนุรักษ์",
-# "แหล่งธรรมชาติท้องถิ่น"), so matching is by substring rather than equality. Longest
-# alias wins, which is what keeps a combined "แหล่งมรดกโลกและบัญชีรายชื่อเบื้องต้น" from
-# being filed under แหล่งมรดกโลก when it is really the Tentative List row.
+# ONEP spells each dataset several ways, so matching is by substring, not equality.
+# Longest alias wins, so "แหล่งมรดกโลกและบัญชีรายชื่อเบื้องต้น" files under Tentative List.
 CATEGORY_ALIASES: dict[str, tuple[str, ...]] = {
     "แหล่งศิลปกรรม": ("แหล่งศิลปกรรม", "ศิลปกรรม"),
     "แหล่งธรรมชาติ": ("แหล่งธรรมชาติ", "ธรรมชาติ"),
     "แหล่งมรดกโลก": ("แหล่งมรดกโลก", "มรดกโลก"),
     "Tentative List": ("บัญชีรายชื่อเบื้องต้น", "tentative list", "tentative"),
     "พื้นที่คุ้มครอง": ("พื้นที่คุ้มครอง", "พื้นที่อนุรักษ์", "คุ้มครอง"),
-    # "ผังพื้นที่อนุรักษ์-ภูมินิเวศ" is what ONEP actually sends, and it contains
-    # "พื้นที่อนุรักษ์" - a longer alias than "ภูมินิเวศ" - so without the full string
-    # here it lands in พื้นที่คุ้มครอง and the report says "ไม่พบผังภูมินิเวศ" for a
-    # category ONEP reported sites in.
+    # ONEP sends "ผังพื้นที่อนุรักษ์-ภูมินิเวศ", which contains the longer "พื้นที่อนุรักษ์";
+    # without the full string here it misfiles under พื้นที่คุ้มครอง.
     "ผังภูมินิเวศ": ("ผังพื้นที่อนุรักษ์-ภูมินิเวศ", "ผังพื้นที่อนุรักษ์", "ผังภูมินิเวศ", "ภูมินิเวศ"),
 }
 
@@ -58,9 +47,8 @@ def resolve_category(value: str | None) -> str | None:
     """
     Map one ONEP `category` string onto a display name, or None when nothing matches.
 
-    An unmatched category is never dropped: format_category_breakdown prints it as its
-    own extra row, so a name ONEP spells in a way we did not anticipate still reaches
-    the reviewer instead of vanishing into a "ไม่พบ" line that would be a lie.
+    An unmatched category is not dropped: format_category_breakdown prints it as an
+    extra row rather than let it vanish into a false "ไม่พบ" line.
     """
     if not value:
         return None
@@ -80,9 +68,8 @@ def format_number(value: float) -> str:
     """
     Render a measurement for the LLM's context block: separators, at most 2 decimals.
 
-    Arabic digits on purpose - this feeds the prompt, not the letter. Plain f-string
-    `:g` flips to scientific notation around 1e6, routine for a GIS area in square
-    metres, which would be fed to the LLM as ground truth in a form it misreads.
+    Arabic digits on purpose (feeds the prompt, not the letter). Avoids `:g`, which
+    flips to scientific notation around 1e6 — routine for a GIS area, and misread.
     """
     rounded = round(value, 2)
 
@@ -100,11 +87,10 @@ def format_location(province: str | None, district: str | None, tambon: str | No
 
 def format_project_area(project: AnalysisProject) -> str:
     """
-    The provinces and districts the project sits in, for the opening paragraph.
+    The provinces the project sits in, for the opening paragraph.
 
-    CRAFT asks the opening to state where the project is. A project can carry several
-    features in different provinces (worked example 5.2 of the contract does), so this
-    lists every distinct one rather than the first.
+    A project can carry features in different provinces, so this lists every distinct
+    one rather than the first.
     """
     provinces = dict.fromkeys(
         feature.location.province for feature in project.features if feature.location.province
@@ -126,8 +112,7 @@ def format_feature(feature: AnalysisFeature, index: int) -> str:
         else "ไม่มีรัศมีตรวจสอบ"
     )
 
-    # Keyed off geom_type, not "whichever field is non-null first": a polygon may carry
-    # both a perimeter length and an area, and for a polygon the area is the real metric.
+    # Keyed off geom_type: a polygon carries both length and area, and area is its metric.
     if feature.geom_type == "polygon" and feature.area_sqm is not None:
         size_note = f"พื้นที่ {format_number(feature.area_sqm)} ตร.ม."
     elif feature.geom_type == "line" and feature.length_m is not None:
@@ -172,11 +157,10 @@ def format_project(request: AnalysisRequest) -> str:
 
 def format_overlap(site: SiteImpact) -> str | None:
     """
-    The magnitude of the impact — how much of the site actually falls in the buffer.
+    The magnitude of the impact — how much of the site falls in the buffer.
 
-    Distance alone can't distinguish a project clipping a wetland's edge from one
-    covering 40% of it, so these go into the prompt rather than being dropped.
-    A 0/None value means "not applicable to this geometry kind" per the spec.
+    Distance alone can't tell a clipped edge from a 40% overlap. A 0/None value means
+    "not applicable to this geometry kind" per the spec.
     """
     parts = []
 
@@ -196,8 +180,7 @@ def format_site(site: SiteImpact) -> str:
     name = site.site_name or "(ไม่มีชื่อ)"
     kind = site.site_type or site.category or "ไม่ทราบประเภท"
     location = format_location(site.province, site.district, site.tambon)
-    # Rounded before comparing: a computed distance can land on float residue like
-    # 1e-08, which is an overlap in practice but would print as "ห่าง 0 ม.".
+    # Rounded before comparing: float residue like 1e-08 is an overlap but prints as "0 ม.".
     distance = (
         "อยู่ในพื้นที่โครงการ"
         if round(site.closest_distance_m, 1) == 0
@@ -238,8 +221,8 @@ def naming_verdicts(request: AnalysisRequest) -> dict[tuple[str | None, str], bo
         for category in merge_categories(request.summary.by_category)
     }
 
-    # A cut sites[] makes every group count a floor rather than the truth, so a group
-    # that looks small inside an oversized category has not been shown to be small.
+    # A truncated sites[] makes each count a floor, so a small-looking group in an
+    # oversized category isn't proven small.
     return {
         (category, label): count <= NAME_LIMIT
         and not (request.sites_truncated and totals.get(category, count) > NAME_LIMIT)
@@ -251,10 +234,8 @@ def format_site_group(label: str, sites: list[SiteImpact]) -> str:
     """
     One aggregate line standing in for a group with too many sites to name.
 
-    The names are withheld from the model rather than forbidden by a prompt rule.
-    Told in the prompt not to list 52 waterways but handed all 52 names anyway, the
-    model listed eight of them - the pull of a name sitting in the context beats an
-    instruction elsewhere in it. What it is not given, it cannot copy out.
+    Names are withheld from the model, not just forbidden: handed all 52 waterway names
+    despite the prompt, the model listed eight. What it isn't given, it can't copy out.
     """
     provinces = " ".join(dict.fromkeys(site.province for site in sites if site.province))
     inside = any(round(site.closest_distance_m, 1) == 0 for site in sites)
@@ -262,10 +243,8 @@ def format_site_group(label: str, sites: list[SiteImpact]) -> str:
 
     parts = [f"- {label} (พบหลายแห่ง) ในพื้นที่ {provinces or NO_LOCATION}"]
 
-    # No count, deliberately. An earlier version said "ตัดผ่าน 16 แห่ง" here and the
-    # model printed that figure in its point, against a count section that had already
-    # said 52 - two different totals for one dataset in one letter. Distances are safe
-    # to hand over (สผ.'s letters quote them); counts belong to the count section alone.
+    # No count, deliberately: an earlier "ตัดผ่าน 16 แห่ง" got printed against a count
+    # section saying 52. Distances are safe to hand over; counts belong to that section.
     if inside:
         parts.append("มีบางแห่งที่แนวเส้นทางโครงการตัดผ่านหรืออยู่ในพื้นที่โครงการ")
     else:
@@ -321,9 +300,7 @@ def merge_categories(by_category: list[CategorySummary]) -> list[CategorySummary
     """
     Collapse repeated `category` names into one row, preserving first-seen order.
 
-    The breakdown and the guidance section must not disagree about the same
-    category — one reading a dict that keeps the last duplicate while the other
-    walks the raw list would print one count above two contradictory guidances.
+    So the breakdown and guidance sections can't disagree about the same category.
     """
     merged: dict[str | None, CategorySummary] = {}
 
@@ -361,8 +338,7 @@ def resolved_categories(request: AnalysisRequest) -> dict[str, CategorySummary]:
         if existing is None:
             resolved[display] = category
         else:
-            # Two ONEP spellings of one dataset, e.g. "แหล่งธรรมชาติอันควรอนุรักษ์" and
-            # "แหล่งธรรมชาติท้องถิ่น": one display row, one combined count.
+            # Two ONEP spellings of one dataset: one display row, one combined count.
             existing.site_count += category.site_count
 
     return resolved
@@ -372,8 +348,8 @@ def category_site_type_counts(sites: list[SiteImpact], category: str | None) -> 
     """
     Count `sites[]` rows of one category, grouped by their most specific known type.
 
-    Feeds the LLM the "ประเภทแหล่งน้ำ ๑๑ แห่ง / ประเภทถ้ำ ๑ แห่ง" distinction that สผ.'s
-    own letters draw. Only as complete as `sites[]` itself, which may be truncated.
+    Feeds the LLM the per-type distinction สผ. letters draw. Only as complete as
+    `sites[]`, which may be truncated.
     """
     counts: dict[str, int] = {}
 
@@ -389,8 +365,7 @@ def category_site_type_counts(sites: list[SiteImpact], category: str | None) -> 
 
 def format_category_line(index: int, name: str, site_count: int) -> str:
     """One numbered line of the count section, in the wording CRAFT's example shows."""
-    # "ไม่พบTentative List" runs together in Thai, which has no inter-word space; a
-    # Latin name needs the space back or the two words read as one token.
+    # "ไม่พบTentative List" runs together; a Latin name needs the space restored.
     lead = f"{format_count(index)}. "
     spacer = " " if name[:1].isascii() else ""
 
@@ -426,13 +401,9 @@ def format_category_context(request: AnalysisRequest) -> str:
     """
     The per-category counts as context for the LLM, with the site-type breakdown.
 
-    Each type carries its own naming verdict in brackets - the same verdict that
-    decided whether format_sites handed over that type's names at all. Stated here
-    so the model can see why a group arrived without names, rather than reading the
-    gap as missing data and hedging about it in the prose.
-
-    Arabic digits and a flat shape on purpose: this is input the model reasons over,
-    not text it should echo. The report body is assembled separately.
+    Each type carries its naming verdict in brackets, so the model sees why a group
+    arrived without names instead of reading the gap as missing data. Arabic digits
+    on purpose: input the model reasons over, not text to echo.
     """
     verdicts = naming_verdicts(request)
     lines = []
@@ -470,9 +441,8 @@ def format_guidance_context(request: AnalysisRequest) -> str:
     """
     ONEP's own `guidance` text per category, as background for the LLM.
 
-    Fed as input rather than printed verbatim: สผ.'s real letters carry no bracketed
-    citation numbers, and the canned text is exactly what ONEP flagged as reading
-    poorly. The model may draw on it, but the wording it produces is its own.
+    Fed as input, not printed verbatim: the canned text is what ONEP flagged as
+    reading poorly, so the model rewords it.
     """
     blocks = []
 

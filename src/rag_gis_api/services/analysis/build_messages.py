@@ -8,8 +8,7 @@ from rag_gis_api.services.analysis.format_payload import (
     format_sites,
 )
 
-# The prompt follows the CRAFT spec section by section. Context (C) is the human
-# message; Role, Action, Format and Tone are below, in that order.
+# CRAFT spec: Context (C) is the human message; Role, Action, Format, Tone below.
 ROLE = (
     "[บทบาท]\n"
     "คุณคือเจ้าหน้าที่ชำนาญการด้านการวิเคราะห์ผลกระทบสิ่งแวดล้อม "
@@ -56,8 +55,7 @@ FORMAT = (
     "- ถ้าโครงการมีหลายรูปในคนละพื้นที่ ให้กล่าวถึงทุกพื้นที่ที่เกี่ยวข้อง ไม่ใช่แค่พื้นที่เดียว"
 )
 
-# Distilled from seven real สผ. letters. Given as vocabulary, not as text to copy: the
-# same measure has to be re-anchored to whichever sites this project actually touches.
+# Vocabulary distilled from seven real สผ. letters, not text to copy verbatim.
 STYLE = (
     "[สำนวนที่ สผ. ใช้จริง — ใช้เป็นแนวทาง ปรับให้เข้ากับข้อมูลจริง ไม่ต้องลอกทั้งประโยค]\n"
     "- ขึ้นต้นข้อด้วย 'เนื่องจากแนวเส้นทางโครงการตัดผ่าน...' หรือ "
@@ -84,9 +82,8 @@ TONE = (
     "ผู้อ่านคือเจ้าหน้าที่ สผ. ที่จะตรวจทานแล้วนำข้อความนี้ไปใช้ในหนังสือราชการต่อ"
 )
 
-# The site-name rule is the one that matters most. สผ.'s letters name real ห้วย, วัด and
-# ชุมชน, and a name invented here — or carried over from a different project — reads as
-# authoritative to the reviewer copying it onward.
+# The site-name rule matters most: an invented name reads as authoritative to the
+# reviewer copying it onward.
 RULES = (
     "[ข้อห้าม]\n"
     "- ตอบเป็นข้อความธรรมดา (plain text) ล้วน ห้ามใช้ Markdown หรือ HTML "
@@ -110,11 +107,10 @@ NO_CONTEXT = "(ไม่พบเอกสารกฎหมายหรือ�
 
 def format_legal_context(chunks: list[Document]) -> str:
     """
-    The retrieved corpus passages, labelled by source and page.
+    The retrieved corpus passages, labelled by source and page in prose.
 
-    Labelled in prose rather than as [1] [2]: a numbered list here is an invitation to
-    cite those numbers in the answer, and the reference letters carry no bracketed
-    citations at all.
+    Not as [1] [2]: numbering invites the model to cite it, and สผ. letters carry no
+    bracketed citations.
     """
     if not chunks:
         return NO_CONTEXT

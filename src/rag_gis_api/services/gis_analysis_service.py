@@ -38,8 +38,6 @@ async def retrieve_legal_chunks(request: AnalysisRequest) -> list[Document]:
         if chunk is None:
             continue
 
-        # Falls back to the text when a chunk carries no id: two stores of the same
-        # passage would otherwise both survive and waste a slot on a duplicate.
         key = chunk.metadata.get("id") or chunk.page_content
 
         if key in seen:
@@ -57,19 +55,8 @@ async def retrieve_legal_chunks(request: AnalysisRequest) -> list[Document]:
 async def summarize_impact(request: AnalysisRequest) -> str:
     """
     Turn one ONEP impact-analysis payload into a Thai plain-text official-style report.
-
-    The opening, the per-category counts, the total, and the closing template sentences
-    are assembled deterministically (`build_report`) so figures a สผ. reviewer copies
-    onward can never drift. The model writes only the opinion points — the one section
-    that carries no counts — grounded in the ingested corpus.
-
-    Raises EmptySummaryError when the model produces no usable point: the rest of the
-    report would still be non-empty, so without this a report missing its whole
-    analysis section would be delivered as a 200 instead of a retryable failure.
     """
     if request.summary.total_sites == 0:
-        # Still a full report: six "ไม่พบ" lines and a total of ๐ are the answer, and a
-        # stated absence is what the reviewer needs. No model call has anything to add.
         return build_report(request, "")
 
     legal_chunks = await retrieve_legal_chunks(request)
