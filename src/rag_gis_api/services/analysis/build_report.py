@@ -87,15 +87,20 @@ def build_opening(request: AnalysisRequest) -> str:
     project = request.project
     agency = project.agency or DEFAULT_AGENCY
 
-    return (
+    opening = (
         f"{OFFICE}ได้ตรวจสอบข้อมูลพื้นที่ศึกษาของ{project_name_phrase(project)} "
         f"ซึ่งเป็นโครงการประเภท{project.project_type} - {project.project_sub_type} "
         f"ตั้งอยู่ในพื้นที่{format_project_area(project)}\n\n"
         f"เพื่อให้{agency}ได้รับข้อมูลที่ครอบคลุมประเด็นที่อาจเกิดผลกระทบ"
         "ต่อสิ่งแวดล้อมธรรมชาติและศิลปกรรม และแหล่งมรดกโลกอย่างรอบด้าน "
         f"จึงได้ตรวจสอบข้อมูลที่เกี่ยวข้องทั้งหมด ได้แก่ {CHECKED_DATASETS} "
-        f"{buffer_phrase(project)}จากบริเวณพื้นที่โครงการฯ สรุปได้ ดังนี้"
+        f"{buffer_phrase(project)} จากบริเวณพื้นที่โครงการฯ สรุปได้ ดังนี้"
     )
+
+    # The project name arrives from ONEP with Arabic digits ("ทางหลวงหมายเลข 1"), and
+    # สผ.'s letters render exactly that phrase in Thai digits. Converted here rather
+    # than at the source so the stored payload keeps ONEP's own spelling.
+    return thai_digits_in_prose(opening)
 
 
 def build_totals(request: AnalysisRequest) -> str:
