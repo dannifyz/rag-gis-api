@@ -10,6 +10,15 @@ from rag_gis_api.services.analysis.thai_text import format_count
 NO_LOCATION = "ไม่ทราบตำแหน่ง"
 UNKNOWN_CATEGORY = "ไม่ทราบหมวด"
 
+# Up to this many sites of one type, an opinion point can name each of them; past it the
+# list of names would run longer than the point it sits in. Decided per site_type rather
+# than per category because a project can touch 86 waterways and one cave, and the cave
+# is still worth naming. Prose only - the numbered count section states every total.
+NAME_LIMIT = 4
+
+NAME_ALLOWED = "ระบุชื่อแหล่งได้"
+NAME_DENIED = "ไม่ต้องไล่ชื่อแหล่ง ให้กล่าวรวมเป็นประเภท"
+
 # The six datasets the CRAFT spec names, in the order the report lists them. Every one
 # is printed on every report - "ไม่พบ<หมวด>" for a zero hit - because a สผ. reviewer
 # reads a stated absence as a checked-and-clear result, while a missing line reads as
@@ -324,9 +333,19 @@ def format_category_breakdown(request: AnalysisRequest) -> str:
     return "\n".join(lines)
 
 
+def naming_note(count: int, *, trusted: bool) -> str:
+    """Whether the opinion points may name the sites of a group this size."""
+    return NAME_ALLOWED if trusted and count <= NAME_LIMIT else NAME_DENIED
+
+
 def format_category_context(request: AnalysisRequest) -> str:
     """
     The per-category counts as context for the LLM, with the site-type breakdown.
+
+    Each type carries its own naming verdict in brackets. Computed here rather than
+    left to the prompt because deciding it means counting rows, and a model that
+    miscounts would either bury the point under a name list or drop names it should
+    have given - both invisible in an output that otherwise reads correctly.
 
     Arabic digits and a flat shape on purpose: this is input the model reasons over,
     not text it should echo. The report body is assembled separately.
@@ -339,10 +358,20 @@ def format_category_context(request: AnalysisRequest) -> str:
 
         display = resolve_category(category.category) or category.category or UNKNOWN_CATEGORY
         counts = category_site_type_counts(request.sites, category.category)
-        breakdown = ", ".join(f"{label} {count} แห่ง" for label, count in counts.items())
+        # A cut sites[] makes every type count a floor rather than the truth, so a type
+        # that looks small inside an oversized category has not been shown to be small.
+        trusted = not (request.sites_truncated and category.site_count > NAME_LIMIT)
+        breakdown = ", ".join(
+            f"{label} {count} แห่ง [{naming_note(count, trusted=trusted)}]"
+            for label, count in counts.items()
+        )
 
         line = f"- {display}: {category.site_count} แห่ง"
-        lines.append(f"{line} (แยกตามประเภท: {breakdown})" if breakdown else line)
+        lines.append(
+            f"{line} (แยกตามประเภท: {breakdown})"
+            if breakdown
+            else f"{line} [{naming_note(category.site_count, trusted=trusted)}]"
+        )
 
     if not lines:
         return "(ไม่พบแหล่งในหมวดใด)"
