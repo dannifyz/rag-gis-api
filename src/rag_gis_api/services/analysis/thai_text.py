@@ -44,3 +44,14 @@ PROSE_DIGITS = re.compile(r"(?<![A-Za-z])\d+(?![A-Za-z])")
 def thai_digits_in_prose(text: str) -> str:
     """Convert the figures in free text written by the model, sparing Latin identifiers."""
     return PROSE_DIGITS.sub(lambda match: to_thai_digits(match.group()), text)
+
+
+def normalize_sara_am(text: str) -> str:
+    """
+    Put ำ back together where it arrived as นิคหิต + สระอา.
+
+    The model emits the decomposed pair often enough to matter ("ระบายน้ํา" for
+    "ระบายน้ำ"): the two render as near-identical glyphs, so it survives review and
+    lands in a หนังสือราชการ as a word no Thai search will match.
+    """
+    return text.replace("ํา", "ำ")

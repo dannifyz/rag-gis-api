@@ -8,6 +8,7 @@ from rag_gis_api.services.analysis.format_payload import (
 from rag_gis_api.services.analysis.thai_text import (
     format_count,
     format_measure,
+    normalize_sara_am,
     thai_digits_in_prose,
 )
 
@@ -43,6 +44,13 @@ CLOSING = "จึงเรียนมาเพื่อโปรดพิจา
 # numeral with a dot or paren, or a bullet character. Stripped so the Thai numbering
 # below is the only numbering in the output and can never disagree with itself.
 LIST_MARKER = re.compile(r"^\s*(?:[\d๐-๙]+\s*[.)]|[-*•])\s*")
+
+# Below this a line cannot be an opinion point: every point has to carry both an impact
+# and a mitigation in one sentence, which never fits in a few dozen characters. Real
+# points run past 150. This drops the section heading the model sometimes echoes back
+# ("ข้อคิดเห็น", "ข้อคิดเห็นและข้อเสนอแนะ") before its first real point, which would
+# otherwise be numbered ๑ and push every genuine point one number down.
+MIN_POINT_CHARS = 40
 
 
 def project_name_phrase(project: AnalysisProject) -> str:
@@ -123,11 +131,13 @@ def format_opinions(text: str) -> str:
     paragraph it writes looking unlike the rest of the letter.
     """
     points = [
-        stripped for line in text.splitlines() if (stripped := LIST_MARKER.sub("", line).strip())
+        stripped
+        for line in text.splitlines()
+        if len(stripped := LIST_MARKER.sub("", line).strip()) >= MIN_POINT_CHARS
     ]
 
     return "\n".join(
-        f"{format_count(number)}. {thai_digits_in_prose(point)}"
+        f"{format_count(number)}. {normalize_sara_am(thai_digits_in_prose(point))}"
         for number, point in enumerate(points, start=1)
     )
 
