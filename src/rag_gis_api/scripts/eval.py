@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import sys
 
@@ -35,8 +36,24 @@ async def evaluate_case(label: Label) -> CaseScore:
     return case_score
 
 
-async def run() -> list[CaseScore]:
+def select_labels(case_ids: list[str]) -> list[Label]:
+    """Every case, or just the requested ids in the order given."""
     labels = load_labels()
+
+    if not case_ids:
+        return labels
+
+    by_id = {label.id: label for label in labels}
+    unknown = [case_id for case_id in case_ids if case_id not in by_id]
+
+    if unknown:
+        available = ", ".join(by_id)
+        raise SystemExit(f"unknown case id(s): {', '.join(unknown)}\navailable: {available}")
+
+    return [by_id[case_id] for case_id in case_ids]
+
+
+async def run(labels: list[Label]) -> list[CaseScore]:
     scores: list[CaseScore] = []
 
     with tqdm(labels, desc="Evaluating", unit="case") as bar:
@@ -67,8 +84,21 @@ def main() -> None:
     # The Windows console defaults to cp1252, which cannot print Thai.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    scores = asyncio.run(run())
+    parser = argparse.ArgumentParser(
+        description="Run the LLM-as-a-judge recall evaluation over the cases in evals/."
+    )
+    parser.add_argument(
+        "cases",
+        nargs="*",
+        help="case id ที่จะรัน เช่น case_001 case_003 (เว้นว่าง = ทุกเคส)",
+    )
+    args = parser.parse_args()
+
+    labels = select_labels(args.cases)
+    scores = asyncio.run(run(labels))
 
     summary = build_summary(scores)
-    write_summary(summary)
     print_summary(summary)
+
+    if not args.cases:
+        write_summary(summary)
