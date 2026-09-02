@@ -1,10 +1,10 @@
 import json
-from pathlib import Path
 
 from pydantic import BaseModel
 
 from rag_gis_api.evaluation.config import EVALS_DIR, LABELS_PATH
 from rag_gis_api.schemas.analysis import AnalysisRequest
+from rag_gis_api.services.ingest.loader.load_file import load_file
 
 
 class Label(BaseModel):
@@ -24,5 +24,6 @@ def load_request(label: Label) -> AnalysisRequest:
     return AnalysisRequest.model_validate_json(payload)
 
 
-def expected_pdf_path(label: Label) -> Path:
-    return EVALS_DIR / label.expected
+def load_expected_text(label: Label) -> str:
+    pages = load_file(EVALS_DIR / label.expected)
+    return "\n\n".join(page.page_content for page in pages)

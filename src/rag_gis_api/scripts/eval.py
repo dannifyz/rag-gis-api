@@ -5,12 +5,11 @@ from tqdm import tqdm
 
 from rag_gis_api.evaluation.dataset import (
     Label,
-    expected_pdf_path,
+    load_expected_text,
     load_labels,
     load_request,
 )
 from rag_gis_api.evaluation.judge import judge_recall
-from rag_gis_api.evaluation.pdf import pdf_to_image_data_urls
 from rag_gis_api.evaluation.report import (
     build_summary,
     score_case,
@@ -28,8 +27,8 @@ async def evaluate_case(label: Label) -> CaseScore:
     output = await summarize_impact(request)
     write_actual(label, output)
 
-    expected_images = pdf_to_image_data_urls(expected_pdf_path(label))
-    judgement = await judge_recall(expected_images, output)
+    expected_text = await asyncio.to_thread(load_expected_text, label)
+    judgement = await judge_recall(expected_text, output)
 
     case_score = score_case(label, judgement)
     write_case_score(case_score)

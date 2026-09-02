@@ -9,13 +9,14 @@ from rag_gis_api.services.llm_service import get_llm
 # in deterministically, so counting them would only inflate recall.
 JUDGE_SYSTEM_PROMPT = (
     "คุณคือผู้ประเมินคุณภาพ (LLM-as-a-judge) เปรียบเทียบหนังสือราชการที่ LLM ร่าง "
-    "กับหนังสือเฉลย (expected) ของ สผ. ที่แนบมาเป็นรูปภาพ\n\n"
+    "กับหนังสือเฉลย (expected) ของ สผ.\n\n"
     "ขั้นตอน:\n"
-    "1. อ่านหนังสือเฉลยจากรูปภาพ แล้วดึง 'ใจความสำคัญ' ที่ตรวจสอบได้ออกมาเป็นข้อ ๆ "
+    "1. อ่านหนังสือเฉลย แล้วดึง 'ใจความสำคัญ' ที่ตรวจสอบได้ออกมาเป็นข้อ ๆ "
     "โดยเน้นเนื้อหาสาระ ได้แก่ ผลการตรวจสอบ (เช่น พบ/ไม่พบแหล่งประเภทใด จำนวนแหล่ง) "
     "และข้อคิดเห็น/ข้อเสนอแนะแต่ละข้อ (ผลกระทบที่ระบุ ชื่อแหล่งที่เอ่ยถึง และมาตรการที่แนะนำ)\n"
     "   ห้ามนับข้อความสำเร็จรูปเป็นใจความ ได้แก่ หัวจดหมาย เลขที่หนังสือ วันที่ คำขึ้นต้น "
-    "คำลงท้าย ลายเซ็น QR Code ข้อมูลติดต่อ และย่อหน้ามาตรฐานเรื่องการสำรวจพื้นที่จริง\n"
+    "คำลงท้าย ลายเซ็น ข้อมูลติดต่อ และย่อหน้ามาตรฐานเรื่องการสำรวจพื้นที่จริง\n"
+    "   หมายเหตุ: หนังสือเฉลยผ่านการ OCR อาจมีตัวสะกดคลาดเคลื่อนบ้าง ให้ตีความตามความหมาย\n"
     "2. สำหรับใจความแต่ละข้อ ตัดสินว่า LLM output เขียนถึงหรือไม่ (covered) "
     "โดยยึดความหมายที่ตรงกัน ไม่จำเป็นต้องใช้ถ้อยคำเดียวกัน "
     "และยกข้อความจาก LLM output มาเป็นหลักฐาน (evidence)\n"
@@ -24,19 +25,13 @@ JUDGE_SYSTEM_PROMPT = (
 )
 
 
-async def judge_recall(expected_image_urls: list[str], actual_text: str) -> JudgeResult:
+async def judge_recall(expected_text: str, actual_text: str) -> JudgeResult:
     """Compare one LLM output against its expected letter and return the raw judgement."""
     llm = get_llm().with_structured_output(JudgeResult)
 
-    content: list[dict] = [
-        {"type": "text", "text": "หนังสือเฉลย (expected) ตามรูปภาพต่อไปนี้:"},
-        *({"type": "image_url", "image_url": url} for url in expected_image_urls),
-        {"type": "text", "text": f"LLM output ที่ต้องประเมิน:\n\n{actual_text}"},
-    ]
-
-    return await llm.ainvoke(
-        [
-            SystemMessage(JUDGE_SYSTEM_PROMPT),
-            HumanMessage(content=content),
-        ]
+    human = (
+        f"หนังสือเฉลย (expected):\n\n{expected_text}\n\n"
+        f"=====\n\nLLM output ที่ต้องประเมิน:\n\n{actual_text}"
     )
+
+    return await llm.ainvoke([SystemMessage(JUDGE_SYSTEM_PROMPT), HumanMessage(human)])
