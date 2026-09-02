@@ -21,6 +21,7 @@ dependencies = [
     "python-docx>=1.2.0",
     "python-dotenv>=1.2.2",
     "sse-starlette>=3.4.8",
+    "tqdm>=4.70.0",
     "uvicorn>=0.52.3",
 ]
 
@@ -28,6 +29,7 @@ dependencies = [
 rag-gis-api = "rag_gis_api.app:main"
 rag-gis-chat = "rag_gis_api.scripts.chat:main"
 rag-gis-clear-chunks = "rag_gis_api.scripts.clear_chunks:main"
+rag-gis-eval = "rag_gis_api.scripts.eval:main"
 rag-gis-ingest = "rag_gis_api.scripts.ingest:main"
 rag-gis-load-chunks = "rag_gis_api.scripts.load_chunks:main"
 rag-gis-load-file = "rag_gis_api.scripts.load_file:main"
