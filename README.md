@@ -71,6 +71,7 @@ uv run pre-commit run --all-files
 | `uv run rag-gis-load-chunks <path> --page N` | print เฉพาะ chunk ของหน้า N (เริ่มที่ 0) |
 | `uv run rag-gis-prompt` | ส่ง prompt ตัวอย่างไปหา LLM แล้ว print คำตอบ ใช้ตรวจว่าต่อ Gemini ได้ไหม |
 | `uv run rag-gis-prompt "<คำถาม>"` | ถามคำถามเอง (system prompt กำกับให้ตอบสั้น ๆ ไม่เกิน 2 ประโยค) |
+| `uv run rag-gis-eval` | รัน evaluation แบบ LLM-as-a-judge ทุกเคสใน `evals/` แล้วเขียนผลลง `evals/actual/` กับ `evals/scores/` |
 | `uv run ruff format .` | format โค้ดทั้งโปรเจกต์ |
 | `uv run ruff check .` | ตรวจ lint |
 | `uv run pre-commit run --all-files` | รัน hook กับไฟล์ทั้งหมดโดยไม่ต้อง commit |
