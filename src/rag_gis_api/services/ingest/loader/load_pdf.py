@@ -7,7 +7,7 @@ from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
 
-from rag_gis_api import DATA_PATH
+from rag_gis_api import DATA_PATH, PROJECT_ROOT
 from rag_gis_api.repositories import document_repository
 from rag_gis_api.repositories.document_repository import PageState
 from rag_gis_api.services.ingest.calculate_hash import calculate_content_hash
@@ -147,7 +147,10 @@ async def read_pages(
     loader = PyPDFLoader(str(path))
     pages = loader.lazy_load()
 
-    source = path.relative_to(DATA_PATH).as_posix()
+    try:
+        source = path.relative_to(DATA_PATH).as_posix()
+    except ValueError:
+        source = path.relative_to(PROJECT_ROOT).as_posix()
 
     documents = []
 

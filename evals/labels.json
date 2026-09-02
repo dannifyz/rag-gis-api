@@ -1,0 +1,65 @@
+[
+    {
+        "id": "case_001",
+        "project_id": "62efd378-db28-4103-bcf4-baab51c55938",
+        "project_name": "ทางหลวงพิเศษระหว่างเมือง สายชลบุรี-หนองคาย",
+        "input": "inputs/case_001.json",
+        "expected": "expected/case_001.pdf",
+        "actual": "actual/case_001.md",
+        "score": "scores/case_001.md"
+    },
+    {
+        "id": "case_002",
+        "project_id": "a4c7fa48-cd38-4d9d-bdd6-621447c1b93a",
+        "project_name": "ทางหลวงพิเศษระหว่างเมือง หมายเลข 8",
+        "input": "inputs/case_002.json",
+        "expected": "expected/case_002.pdf",
+        "actual": "actual/case_002.md",
+        "score": "scores/case_002.md"
+    },
+    {
+        "id": "case_003",
+        "project_id": "ab3e610b-463b-4fbe-9050-817fa47f4bfe",
+        "project_name": "ทางหลวงหมายเลข 117 ช่วงจุดตัดหมายเลขทางหลวง 126",
+        "input": "inputs/case_003.json",
+        "expected": "expected/case_003.pdf",
+        "actual": "actual/case_003.md",
+        "score": "scores/case_003.md"
+    },
+    {
+        "id": "case_004",
+        "project_id": "927ec37f-7beb-4cfa-a629-ff5218e4d3b8",
+        "project_name": "ทางหลวงหมายเลข 331 ช่วงจุดตัดทางหลวงหมายเลข 344",
+        "input": "inputs/case_004.json",
+        "expected": "expected/case_004.pdf",
+        "actual": "actual/case_004.md",
+        "score": "scores/case_004.md"
+    },
+    {
+        "id": "case_005",
+        "project_id": "17c48ee8-e88f-4a6d-a3b9-3cc489798a7a",
+        "project_name": "ทางแยกต่างระดับ จุดตัดทางหลวงหมายเลข 1 กับทางหลวงหมายเลข 11",
+        "input": "inputs/case_005.json",
+        "expected": "expected/case_005.pdf",
+        "actual": "actual/case_005.md",
+        "score": "scores/case_005.md"
+    },
+    {
+        "id": "case_006",
+        "project_id": "0f5d94ad-1ad2-4385-a1e9-05c5a92f5f2a",
+        "project_name": "ทางหลวงหมายเลข 305 กับทางหลวงหมายเลข 3051 (แยกบางอ้อ)",
+        "input": "inputs/case_006.json",
+        "expected": "expected/case_006.pdf",
+        "actual": "actual/case_006.md",
+        "score": "scores/case_006.md"
+    },
+    {
+        "id": "case_007",
+        "project_id": "3c8408f7-a9a2-4d02-ac14-5c24cbf916fc",
+        "project_name": "ทางหลวงพิเศษระหว่างเมืองหมายเลข 5 (MR1) ช่วงสุพรรณบุรี-ชัยนาท ตอน 2",
+        "input": "inputs/case_007.json",
+        "expected": "expected/case_007.pdf",
+        "actual": "actual/case_007.md",
+        "score": "scores/case_007.md"
+    }
+]
