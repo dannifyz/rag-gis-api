@@ -1,0 +1,22 @@
+.git
+.venv
+.vscode
+.ruff_cache
+__pycache__/
+*.py[oc]
+*.egg-info
+build/
+dist/
+wheels/
+
+.env
+CLAUDE.local.md
+
+# Copied into the image prebuilt; the -shm/-wal sidecars are not needed.
+document_cache.db-shm
+document_cache.db-wal
+chroma_db.zip
+
+raw_data/
+knowledges/
+evals/
