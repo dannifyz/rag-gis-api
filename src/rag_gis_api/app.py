@@ -32,7 +32,7 @@ app.include_router(router)
 def main() -> None:
     uvicorn.run(
         "rag_gis_api.app:app",
-        host="127.0.0.1",
+        host="127.0.0.1" if ENV == "local" else "0.0.0.0",
         port=8000,
         reload=ENV == "local",
     )

@@ -7,10 +7,6 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_DOWNLOADS=0 \
     ENV=production
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends nginx \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./
@@ -26,12 +22,9 @@ COPY documents ./documents
 COPY chroma_db ./chroma_db
 COPY document_cache.db ./document_cache.db
 
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-RUN rm -f /etc/nginx/sites-enabled/default
-
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-EXPOSE 80
+EXPOSE 8000
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
