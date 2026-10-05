@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from hmac import compare_digest
 from typing import Annotated
@@ -51,8 +50,7 @@ async def analyze(request: AnalysisRequest) -> PlainTextResponse:
         )
 
     try:
-        async with asyncio.timeout(TIMEOUT_SECONDS):
-            summary = await summarize_impact(request)
+        summary = await summarize_impact(request)
     except TimeoutError:
         logger.exception("analysis timed out for project %s", request.project.id)
         raise HTTPException(status.HTTP_504_GATEWAY_TIMEOUT, detail="analysis timed out") from None
