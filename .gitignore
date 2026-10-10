@@ -28,4 +28,8 @@ documents/*
 raw_data/
 knowledges/
 
+# Evaluation
+evals/*
+!evals/labels.json
+
 CLAUDE.local.md

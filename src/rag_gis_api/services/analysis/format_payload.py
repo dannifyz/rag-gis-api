@@ -1,34 +1,75 @@
 from rag_gis_api.schemas.analysis import (
     AnalysisFeature,
+    AnalysisProject,
     AnalysisRequest,
     CategorySummary,
     SiteImpact,
 )
+from rag_gis_api.services.analysis.thai_text import format_count
 
 NO_LOCATION = "ไม่ทราบตำแหน่ง"
 UNKNOWN_CATEGORY = "ไม่ทราบหมวด"
 
-# Inferred from the spec doc's `category` field examples (introduced with "เช่น" / "e.g." —
-# not marked as the complete, authoritative list) and from a screenshot of ONEP's own
-# "วิเคราะห์โดย AI" tab, which explicitly states "ไม่พบ..." for every category with zero
-# hits rather than omitting it. Confirm this list/order with ONEP before relying on it:
-# a category ONEP spells differently is reported as absent here *and* again as an extra.
-FIXED_CATEGORIES = [
-    "แหล่งธรรมชาติ",
+# Up to this many sites of one type, a point may name each; past it the group is named
+# collectively. All-or-nothing per group, else it reads as สผ. weighting sites unequally.
+# Per site_type, not category: a project can touch 86 waterways and one still-nameable cave.
+NAME_LIMIT = 2
+
+NAME_ALLOWED = "ระบุชื่อแหล่งได้"
+NAME_DENIED = "ไม่ต้องไล่ชื่อแหล่ง ให้กล่าวรวมเป็นประเภท"
+
+# The six CRAFT datasets, in report order. Every one is printed even at zero ("ไม่พบ<หมวด>"):
+# a stated absence reads as checked-and-clear, a missing line as a dataset nobody checked.
+CATEGORY_ORDER = (
     "แหล่งศิลปกรรม",
+    "แหล่งธรรมชาติ",
     "แหล่งมรดกโลก",
-    "พื้นที่อนุรักษ์/คุ้มครอง",
-    "ผังพื้นที่อนุรักษ์-ภูมินิเวศ",
-]
+    "Tentative List",
+    "พื้นที่คุ้มครอง",
+    "ผังภูมินิเวศ",
+)
+
+# ONEP spells each dataset several ways, so matching is by substring, not equality.
+# Longest alias wins, so "แหล่งมรดกโลกและบัญชีรายชื่อเบื้องต้น" files under Tentative List.
+CATEGORY_ALIASES: dict[str, tuple[str, ...]] = {
+    "แหล่งศิลปกรรม": ("แหล่งศิลปกรรม", "ศิลปกรรม"),
+    "แหล่งธรรมชาติ": ("แหล่งธรรมชาติ", "ธรรมชาติ"),
+    "แหล่งมรดกโลก": ("แหล่งมรดกโลก", "มรดกโลก"),
+    "Tentative List": ("บัญชีรายชื่อเบื้องต้น", "tentative list", "tentative"),
+    "พื้นที่คุ้มครอง": ("พื้นที่คุ้มครอง", "พื้นที่อนุรักษ์", "คุ้มครอง"),
+    # ONEP sends "ผังพื้นที่อนุรักษ์-ภูมินิเวศ", which contains the longer "พื้นที่อนุรักษ์";
+    # without the full string here it misfiles under พื้นที่คุ้มครอง.
+    "ผังภูมินิเวศ": ("ผังพื้นที่อนุรักษ์-ภูมินิเวศ", "ผังพื้นที่อนุรักษ์", "ผังภูมินิเวศ", "ภูมินิเวศ"),
+}
+
+
+def resolve_category(value: str | None) -> str | None:
+    """
+    Map one ONEP `category` string onto a display name, or None when nothing matches.
+
+    An unmatched category is not dropped: format_category_breakdown prints it as an
+    extra row rather than let it vanish into a false "ไม่พบ" line.
+    """
+    if not value:
+        return None
+
+    haystack = value.casefold()
+    matches = [
+        (len(alias), display)
+        for display, aliases in CATEGORY_ALIASES.items()
+        for alias in aliases
+        if alias.casefold() in haystack
+    ]
+
+    return max(matches)[1] if matches else None
 
 
 def format_number(value: float) -> str:
     """
-    Render a measurement for Thai prose: thousands separators, at most 2 decimals.
+    Render a measurement for the LLM's context block: separators, at most 2 decimals.
 
-    Plain f-string `:g` flips to scientific notation around 1e6 — routine for a GIS
-    area in square metres — which reads as broken text mid-sentence and would be fed
-    to the LLM as ground truth.
+    Arabic digits on purpose (feeds the prompt, not the letter). Avoids `:g`, which
+    flips to scientific notation around 1e6 — routine for a GIS area, and misread.
     """
     rounded = round(value, 2)
 
@@ -44,6 +85,23 @@ def format_location(province: str | None, district: str | None, tambon: str | No
     return ", ".join(parts) if parts else NO_LOCATION
 
 
+def format_project_area(project: AnalysisProject) -> str:
+    """
+    The provinces the project sits in, for the opening paragraph.
+
+    A project can carry features in different provinces, so this lists every distinct
+    one rather than the first.
+    """
+    provinces = dict.fromkeys(
+        feature.location.province for feature in project.features if feature.location.province
+    )
+
+    if not provinces:
+        return NO_LOCATION
+
+    return " ".join(f"จังหวัด{province}" for province in provinces)
+
+
 def format_feature(feature: AnalysisFeature, index: int) -> str:
     label = feature.label or f"รูปที่ {index}"
     kind = {"point": "จุด", "line": "เส้น", "polygon": "พื้นที่"}[feature.geom_type]
@@ -54,8 +112,7 @@ def format_feature(feature: AnalysisFeature, index: int) -> str:
         else "ไม่มีรัศมีตรวจสอบ"
     )
 
-    # Keyed off geom_type, not "whichever field is non-null first": a polygon may carry
-    # both a perimeter length and an area, and for a polygon the area is the real metric.
+    # Keyed off geom_type: a polygon carries both length and area, and area is its metric.
     if feature.geom_type == "polygon" and feature.area_sqm is not None:
         size_note = f"พื้นที่ {format_number(feature.area_sqm)} ตร.ม."
     elif feature.geom_type == "line" and feature.length_m is not None:
@@ -90,20 +147,20 @@ def format_project(request: AnalysisRequest) -> str:
 
     return (
         f"ชื่อโครงการ: {project.name}\n"
-        f"หน่วยงาน: {agency}\n"
-        f"ประเภทโครงการ: {project.project_type} / {project.project_sub_type}\n"
+        f"หน่วยงานเจ้าของโครงการ: {agency}\n"
+        f"ประเภทโครงการหลัก - ย่อย: {project.project_type} - {project.project_sub_type}\n"
+        f"พื้นที่ที่ตั้ง: {format_project_area(project)}\n"
         f"รัศมีตรวจสอบตามกฎหมาย: {format_number(project.default_buffer_m)} ม.\n"
-        f"รูปที่วาด:\n{features}"
+        f"รูปที่วาด (ข้อมูล GIS):\n{features}"
     )
 
 
 def format_overlap(site: SiteImpact) -> str | None:
     """
-    The magnitude of the impact — how much of the site actually falls in the buffer.
+    The magnitude of the impact — how much of the site falls in the buffer.
 
-    Distance alone can't distinguish a project clipping a wetland's edge from one
-    covering 40% of it, so these go into the prompt rather than being dropped.
-    A 0/None value means "not applicable to this geometry kind" per the spec.
+    Distance alone can't tell a clipped edge from a 40% overlap. A 0/None value means
+    "not applicable to this geometry kind" per the spec.
     """
     parts = []
 
@@ -123,8 +180,7 @@ def format_site(site: SiteImpact) -> str:
     name = site.site_name or "(ไม่มีชื่อ)"
     kind = site.site_type or site.category or "ไม่ทราบประเภท"
     location = format_location(site.province, site.district, site.tambon)
-    # Rounded before comparing: a computed distance can land on float residue like
-    # 1e-08, which is an overlap in practice but would print as "ห่าง 0 ม.".
+    # Rounded before comparing: float residue like 1e-08 is an overlap but prints as "0 ม.".
     distance = (
         "อยู่ในพื้นที่โครงการ"
         if round(site.closest_distance_m, 1) == 0
@@ -147,11 +203,89 @@ def format_site(site: SiteImpact) -> str:
     return ", ".join(parts)
 
 
+def site_group_key(site: SiteImpact) -> tuple[str | None, str]:
+    """The (category, type) pair a site is counted and named under."""
+    return site.category, site.site_type or site.sub_category or "ไม่ทราบประเภท"
+
+
+def naming_verdicts(request: AnalysisRequest) -> dict[tuple[str | None, str], bool]:
+    """Which (category, type) groups are small enough for the prose to name."""
+    counts: dict[tuple[str | None, str], int] = {}
+
+    for site in request.sites:
+        key = site_group_key(site)
+        counts[key] = counts.get(key, 0) + 1
+
+    totals = {
+        category.category: category.site_count
+        for category in merge_categories(request.summary.by_category)
+    }
+
+    # A truncated sites[] makes each count a floor, so a small-looking group in an
+    # oversized category isn't proven small.
+    return {
+        (category, label): count <= NAME_LIMIT
+        and not (request.sites_truncated and totals.get(category, count) > NAME_LIMIT)
+        for (category, label), count in counts.items()
+    }
+
+
+def format_site_group(label: str, sites: list[SiteImpact]) -> str:
+    """
+    One aggregate line standing in for a group with too many sites to name.
+
+    Names are withheld from the model, not just forbidden: handed all 52 waterway names
+    despite the prompt, the model listed eight. What it isn't given, it can't copy out.
+    """
+    provinces = " ".join(dict.fromkeys(site.province for site in sites if site.province))
+    inside = any(round(site.closest_distance_m, 1) == 0 for site in sites)
+    nearest = min(site.closest_distance_m for site in sites)
+
+    parts = [f"- {label} (พบหลายแห่ง) ในพื้นที่ {provinces or NO_LOCATION}"]
+
+    # No count, deliberately: an earlier "ตัดผ่าน 16 แห่ง" got printed against a count
+    # section saying 52. Distances are safe to hand over; counts belong to that section.
+    if inside:
+        parts.append("มีบางแห่งที่แนวเส้นทางโครงการตัดผ่านหรืออยู่ในพื้นที่โครงการ")
+    else:
+        parts.append(f"ใกล้ที่สุดห่าง {format_number(nearest)} ม.")
+
+    parts.append("(ไม่ส่งรายชื่อและจำนวนรายแหล่งของกลุ่มนี้มาให้)")
+
+    return ", ".join(parts)
+
+
 def format_sites(request: AnalysisRequest) -> str:
+    """
+    The site detail block, with over-sized groups collapsed to one aggregate line.
+
+    Groups keep the position of their first member so the whole block stays in
+    ONEP's nearest-first order.
+    """
     if request.summary.total_sites == 0:
         return "(ไม่พบแหล่งที่ได้รับผลกระทบ)"
 
-    lines = [format_site(site) for site in request.sites]
+    verdicts = naming_verdicts(request)
+    lines: list[str] = []
+    groups: dict[tuple[str | None, str], list[SiteImpact]] = {}
+    slots: dict[tuple[str | None, str], int] = {}
+
+    for site in request.sites:
+        key = site_group_key(site)
+
+        if verdicts[key]:
+            lines.append(format_site(site))
+            continue
+
+        if key not in groups:
+            groups[key] = []
+            slots[key] = len(lines)
+            lines.append("")
+
+        groups[key].append(site)
+
+    for key, members in groups.items():
+        lines[slots[key]] = format_site_group(key[1], members)
 
     if request.sites_truncated:
         lines.append(
@@ -166,9 +300,7 @@ def merge_categories(by_category: list[CategorySummary]) -> list[CategorySummary
     """
     Collapse repeated `category` names into one row, preserving first-seen order.
 
-    The breakdown and the guidance section must not disagree about the same
-    category — one reading a dict that keeps the last duplicate while the other
-    walks the raw list would print one count above two contradictory guidances.
+    So the breakdown and guidance sections can't disagree about the same category.
     """
     merged: dict[str | None, CategorySummary] = {}
 
@@ -191,12 +323,33 @@ def merge_categories(by_category: list[CategorySummary]) -> list[CategorySummary
     return list(merged.values())
 
 
+def resolved_categories(request: AnalysisRequest) -> dict[str, CategorySummary]:
+    """{display name: merged summary} for every category that resolved to a known name."""
+    resolved: dict[str, CategorySummary] = {}
+
+    for category in merge_categories(request.summary.by_category):
+        display = resolve_category(category.category)
+
+        if display is None:
+            continue
+
+        existing = resolved.get(display)
+
+        if existing is None:
+            resolved[display] = category
+        else:
+            # Two ONEP spellings of one dataset: one display row, one combined count.
+            existing.site_count += category.site_count
+
+    return resolved
+
+
 def category_site_type_counts(sites: list[SiteImpact], category: str | None) -> dict[str, int]:
     """
     Count `sites[]` rows of one category, grouped by their most specific known type.
 
-    Powers the "* น้ำตก 1 แห่ง / * แหล่งน้ำ 90 แห่ง"-style sub-bullets. Only as complete
-    as `sites[]` itself — see the truncation note appended in `format_category_line`.
+    Feeds the LLM the per-type distinction สผ. letters draw. Only as complete as
+    `sites[]`, which may be truncated.
     """
     counts: dict[str, int] = {}
 
@@ -210,86 +363,99 @@ def category_site_type_counts(sites: list[SiteImpact], category: str | None) -> 
     return counts
 
 
-def format_category_line(
-    index: int,
-    name: str,
-    summary: CategorySummary | None,
-    sites: list[SiteImpact],
-    sites_truncated: bool,
-) -> str:
-    if summary is None or summary.site_count == 0:
-        return f"{index}. ไม่พบ{name}"
+def format_category_line(index: int, name: str, site_count: int) -> str:
+    """One numbered line of the count section, in the wording CRAFT's example shows."""
+    # "ไม่พบTentative List" runs together; a Latin name needs the space restored.
+    lead = f"{format_count(index)}. "
+    spacer = " " if name[:1].isascii() else ""
 
-    header = f"{index}. พบ{name} {summary.site_count} แห่ง"
-    # Matched on the raw category value, not the display name: a null category
-    # renders as "ไม่ทราบหมวด" but still has to be looked up as None.
-    counts = category_site_type_counts(sites, summary.category)
+    if site_count == 0:
+        return f"{lead}ไม่พบ{spacer}{name}"
 
-    if not counts:
-        # sites[] was truncated away entirely, or every row lacked a known type/name.
-        return header
-
-    breakdown = "\n".join(f"   * {label} {count} แห่ง" for label, count in counts.items())
-    block = f"{header} ประกอบด้วย\n{breakdown}"
-
-    if sites_truncated:
-        block += "\n   (หมายเหตุ: รายการแหล่งถูกตัด จำนวนข้างต้นอาจไม่ครบทุกแหล่งในหมวดนี้)"
-
-    return block
+    return f"{lead}พบ{spacer}{name} จำนวน {format_count(site_count)} แห่ง"
 
 
 def format_category_breakdown(request: AnalysisRequest) -> str:
-    """Numbered per-category breakdown, fixed category order, 'ไม่พบ...' for zero hits."""
-    categories = merge_categories(request.summary.by_category)
-    by_name = {category.category: category for category in categories if category.category}
+    """Numbered per-category counts, fixed order, "ไม่พบ..." for every zero hit."""
+    resolved = resolved_categories(request)
+    lines = [
+        format_category_line(index, name, resolved[name].site_count if name in resolved else 0)
+        for index, name in enumerate(CATEGORY_ORDER, start=1)
+    ]
+
+    # Categories ONEP sent that matched no display name — printed rather than dropped.
+    extra = [
+        category
+        for category in merge_categories(request.summary.by_category)
+        if resolve_category(category.category) is None
+    ]
+
+    for offset, category in enumerate(extra, start=len(CATEGORY_ORDER) + 1):
+        name = category.category or UNKNOWN_CATEGORY
+        lines.append(format_category_line(offset, name, category.site_count))
+
+    return "\n".join(lines)
+
+
+def format_category_context(request: AnalysisRequest) -> str:
+    """
+    The per-category counts as context for the LLM, with the site-type breakdown.
+
+    Each type carries its naming verdict in brackets, so the model sees why a group
+    arrived without names instead of reading the gap as missing data. Arabic digits
+    on purpose: input the model reasons over, not text to echo.
+    """
+    verdicts = naming_verdicts(request)
     lines = []
 
-    for index, name in enumerate(FIXED_CATEGORIES, start=1):
-        lines.append(
-            format_category_line(
-                index, name, by_name.get(name), request.sites, request.sites_truncated
-            )
+    for category in merge_categories(request.summary.by_category):
+        if not category.site_count:
+            continue
+
+        display = resolve_category(category.category) or category.category or UNKNOWN_CATEGORY
+        counts = category_site_type_counts(request.sites, category.category)
+        breakdown = ", ".join(
+            f"{label} {count} แห่ง "
+            f"[{NAME_ALLOWED if verdicts.get((category.category, label)) else NAME_DENIED}]"
+            for label, count in counts.items()
         )
 
-    # Categories ONEP sent that fall outside our assumed fixed list — never silently drop them.
-    extra = [category for category in categories if category.category not in FIXED_CATEGORIES]
+        line = f"- {display}: {category.site_count} แห่ง"
+        lines.append(f"{line} (แยกตามประเภท: {breakdown})" if breakdown else line)
 
-    for offset, category in enumerate(extra, start=len(FIXED_CATEGORIES) + 1):
-        name = category.category or UNKNOWN_CATEGORY
+    if not lines:
+        return "(ไม่พบแหล่งในหมวดใด)"
+
+    if request.sites_truncated:
+        # Without this the model reads "88 แห่ง (แยกตามประเภท: วัด 1 แห่ง)" as a
+        # contradiction and tends to talk itself into explaining the gap.
         lines.append(
-            format_category_line(offset, name, category, request.sites, request.sites_truncated)
+            "(หมายเหตุ: ตัวเลขแยกตามประเภทนับจากรายการแหล่งที่ส่งมาซึ่งถูกตัดให้สั้นลง "
+            "จึงน้อยกว่าจำนวนจริงในหมวดนั้น ให้ยึดจำนวนรวมของหมวดเป็นหลัก)"
         )
 
     return "\n".join(lines)
 
 
-def format_guidance_section(request: AnalysisRequest) -> str:
+def format_guidance_context(request: AnalysisRequest) -> str:
     """
-    ONEP's own `guidance` text per category, verbatim, with its `guidance_ref` lines
-    numbered as [1], [2], ... — reproduced as-is rather than paraphrased, since an LLM
-    rewording it could silently break citation numbers meaningful to ONEP's reviewers.
+    ONEP's own `guidance` text per category, as background for the LLM.
 
-    Numbering runs continuously across categories so two different sources can never
-    share a number within one report.
+    Fed as input, not printed verbatim: the canned text is what ONEP flagged as
+    reading poorly, so the model rewords it.
     """
     blocks = []
-    next_ref = 1
 
     for category in merge_categories(request.summary.by_category):
         if not category.site_count or not category.guidance:
             continue
 
-        name = category.category or UNKNOWN_CATEGORY
-        block = f"{name}:\n{category.guidance}"
+        display = resolve_category(category.category) or category.category or UNKNOWN_CATEGORY
+        block = f"{display}:\n{category.guidance}"
 
         if category.guidance_ref:
-            refs = [line for line in category.guidance_ref.splitlines() if line.strip()]
-            numbered = "\n".join(
-                f"[{number}] {line}" for number, line in enumerate(refs, start=next_ref)
-            )
-            next_ref += len(refs)
-            block += f"\n{numbered}"
+            block += f"\nอ้างอิง: {category.guidance_ref}"
 
         blocks.append(block)
 
-    return "\n\n".join(blocks) if blocks else "(ไม่มีข้อมูลแนวทางเพิ่มเติมจาก ONEP สำหรับหมวดที่พบ)"
+    return "\n\n".join(blocks) if blocks else "(ONEP ไม่ได้ส่งแนวทางเพิ่มเติมมาสำหรับหมวดที่พบ)"

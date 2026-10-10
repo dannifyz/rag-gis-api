@@ -1,10 +1,20 @@
 import uvicorn
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from rag_gis_api import ENV
 from rag_gis_api.controllers import analysis_controller, chat_controller
 
 app = FastAPI(title="rag-gis-api")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 router = APIRouter(prefix="/api")
 
 
